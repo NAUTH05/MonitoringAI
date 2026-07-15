@@ -1,19 +1,36 @@
 streams:
-  # ── Hikvision NVR ────────────────────────────────────────────────────────────
-  # Main stream (1080p): Channels/101, 201, 301 ...
-  # Sub stream  (D1):    Channels/102, 202, 302 ...
+  # ── Hikvision NVR — H265 (HEVC) codec ────────────────────────────────────────
+  # Browser không decode H265 trực tiếp → dùng ffmpeg transcode sang H264
+  # Cú pháp: ffmpeg:<rtsp_url>#video=h264
+  #
+  # Main stream 1080p (H265 → transcode H264):
+  # nvr_ch1:
+  #   - ffmpeg:rtsp://admin:password@192.168.1.200:554/Streaming/Channels/101#video=h264
+  # nvr_ch2:
+  #   - ffmpeg:rtsp://admin:password@192.168.1.200:554/Streaming/Channels/201#video=h264
+  # nvr_ch3:
+  #   - ffmpeg:rtsp://admin:password@192.168.1.200:554/Streaming/Channels/301#video=h264
+  #
+  # Sub stream 480p — thường là H264 sẵn, dùng trực tiếp (nhẹ hơn, khuyến nghị):
+  # nvr_ch1_sub: rtsp://admin:password@192.168.1.200:554/Streaming/Channels/102
+  # nvr_ch2_sub: rtsp://admin:password@192.168.1.200:554/Streaming/Channels/202
+  #
+  # ── Hikvision NVR — H264 codec (nếu sub stream đã là H264) ──────────────────
   # nvr_ch1: rtsp://admin:password@192.168.1.200:554/Streaming/Channels/101
   # nvr_ch2: rtsp://admin:password@192.168.1.200:554/Streaming/Channels/201
-
+  #
   # ── Dahua NVR ─────────────────────────────────────────────────────────────────
-  # nvr_ch1: rtsp://admin:password@192.168.1.200:554/cam/realmonitor?channel=1&subtype=0
-  # nvr_ch2: rtsp://admin:password@192.168.1.200:554/cam/realmonitor?channel=2&subtype=0
+  # nvr_ch1:
+  #   - ffmpeg:rtsp://admin:password@192.168.1.200:554/cam/realmonitor?channel=1&subtype=0#video=h264
 
-  # ── Camera trực tiếp (không qua NVR) ─────────────────────────────────────────
-  # cam_gate: rtsp://admin:password@192.168.1.101:554/stream
+ffmpeg:
+  # go2rtc sẽ dùng ffmpeg binary có sẵn trong Docker image (alexxit/go2rtc đã tích hợp)
+  bin: ffmpeg
 
 api:
   listen: ":1984"
+  # Chỉ cho phép truy cập từ nội bộ nếu muốn bảo mật hơn:
+  # origin: "http://192.168.1.SERVER"
   origin: "*"
 
 log:
