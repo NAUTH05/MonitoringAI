@@ -1,0 +1,364 @@
+"use client";
+
+import { api } from "@/lib/api";
+import { ApiResponse } from "@/types";
+import { BarChart2, Download, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+type Period = "daily" | "weekly" | "monthly";
+
+interface DailyReport {
+  date: string;
+  totalEvents: number;
+  totalAlerts: number;
+  byType: Record<string, number>;
+}
+
+interface WeeklyReport {
+  startDate: string;
+  endDate: string;
+  dailyData: { date: string; count: number; alerts: number }[];
+  byType: { type: string; count: number }[];
+}
+
+const COLORS = [
+  "#2563eb",
+  "#dc2626",
+  "#d97706",
+  "#16a34a",
+  "#9333ea",
+  "#0891b2",
+];
+
+export default function ReportsPage() {
+  const [period, setPeriod] = useState<Period>("weekly");
+  const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
+  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+
+  const fetchReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (period === "daily") {
+        const res = await api.get<ApiResponse<DailyReport>>(
+          `/reports/daily?date=${selectedDate}`,
+        );
+        if (res.success) setDailyReport(res.data);
+      } else if (period === "weekly" || period === "monthly") {
+        const res = await api.get<ApiResponse<WeeklyReport>>(
+          `/reports/${period}`,
+        );
+        if (res.success) setWeeklyReport(res.data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [period, selectedDate]);
+
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport]);
+
+  const exportCSV = () => {
+    let csvContent = "";
+    let filename = "";
+
+    if (period === "daily" && dailyReport) {
+      csvContent =
+        "Type,Count\n" +
+        Object.entries(dailyReport.byType)
+          .map(([k, v]) => `${k},${v}`)
+          .join("\n");
+      filename = `report_daily_${dailyReport.date}.csv`;
+    } else if (weeklyReport) {
+      csvContent =
+        "Date,Events,Alerts\n" +
+        weeklyReport.dailyData
+          .map((d) => `${d.date},${d.count},${d.alerts}`)
+          .join("\n");
+      filename = `report_${period}.csv`;
+    }
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => window.print();
+
+  const chartData =
+    period === "daily" && dailyReport
+      ? Object.entries(dailyReport.byType).map(([type, count]) => ({
+          type,
+          count,
+        }))
+      : (weeklyReport?.dailyData.map((d) => ({
+          date: new Date(d.date).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          }),
+          Events: d.count,
+          Alerts: d.alerts,
+        })) ?? []);
+
+  const pieData =
+    period === "daily" && dailyReport
+      ? Object.entries(dailyReport.byType).map(([name, value]) => ({
+          name,
+          value,
+        }))
+      : (weeklyReport?.byType.map((b) => ({ name: b.type, value: b.count })) ??
+        []);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Reports</h1>
+          <p className="text-gray-400 text-sm mt-1">Analytics & statistics</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm transition"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm transition"
+          >
+            <Download className="w-4 h-4" />
+            Print PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Period Selector */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex bg-gray-900 border border-gray-800 rounded-lg p-1">
+          {(["daily", "weekly", "monthly"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition capitalize ${
+                period === p
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        {period === "daily" && (
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        )}
+        <button
+          onClick={fetchReport}
+          className="p-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-white transition"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : (
+        <>
+          {/* Summary cards */}
+          {period === "daily" && dailyReport && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <p className="text-gray-400 text-sm">Total Events</p>
+                <p className="text-3xl font-bold text-white mt-1">
+                  {dailyReport.totalEvents}
+                </p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <p className="text-gray-400 text-sm">Total Alerts</p>
+                <p className="text-3xl font-bold text-red-400 mt-1">
+                  {dailyReport.totalAlerts}
+                </p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <p className="text-gray-400 text-sm">Alert Rate</p>
+                <p className="text-3xl font-bold text-yellow-400 mt-1">
+                  {dailyReport.totalEvents > 0
+                    ? `${((dailyReport.totalAlerts / dailyReport.totalEvents) * 100).toFixed(0)}%`
+                    : "0%"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-gray-300 mb-5 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-blue-400" />
+                {period === "daily" ? "Events by Type" : "Events Over Time"}
+              </h3>
+              <ResponsiveContainer width="100%" height={220}>
+                {period === "daily" ? (
+                  <BarChart
+                    data={chartData as { type: string; count: number }[]}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#1f2937"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="type"
+                      stroke="#4b5563"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="#4b5563"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#111827",
+                        border: "1px solid #1f2937",
+                        borderRadius: "8px",
+                        color: "#f9fafb",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <BarChart
+                    data={
+                      chartData as {
+                        date: string;
+                        Events: number;
+                        Alerts: number;
+                      }[]
+                    }
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#1f2937"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      stroke="#4b5563"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="#4b5563"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#111827",
+                        border: "1px solid #1f2937",
+                        borderRadius: "8px",
+                        color: "#f9fafb",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend />
+                    <Bar
+                      dataKey="Events"
+                      fill="#2563eb"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="Alerts"
+                      fill="#dc2626"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-gray-300 mb-5">
+                By Event Type
+              </h3>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      dataKey="value"
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                      labelLine={false}
+                      fontSize={10}
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell
+                          key={index}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#111827",
+                        border: "1px solid #1f2937",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-12">
+                  No data
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

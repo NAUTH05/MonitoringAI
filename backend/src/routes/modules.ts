@@ -1,0 +1,89 @@
+import { Request, Response, Router } from 'express';
+import prisma from '../lib/prisma';
+import { authenticate, authorize } from '../middleware/auth';
+
+const router = Router();
+
+// GET /api/modules
+router.get('/', authenticate, async (_req: Request, res: Response) => {
+  try {
+    const modules = await prisma.aiModule.findMany({ orderBy: { name: 'asc' } });
+    res.json({ success: true, data: modules });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch modules' });
+  }
+});
+
+// GET /api/modules/camera/:cameraId
+router.get('/camera/:cameraId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const cameraModules = await prisma.cameraModule.findMany({
+      where: { cameraId: req.params.cameraId },
+      include: { module: true },
+    });
+    res.json({ success: true, data: cameraModules });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch camera modules' });
+  }
+});
+
+// POST /api/modules/camera/:cameraId/:moduleId
+router.post('/camera/:cameraId/:moduleId', authenticate, authorize('Admin', 'Manager'), async (req: Request, res: Response) => {
+  try {
+    const existing = await prisma.cameraModule.findUnique({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+    });
+
+    if (existing) {
+      res.status(409).json({ success: false, message: 'Module already assigned to this camera' });
+      return;
+    }
+
+    const cameraModule = await prisma.cameraModule.create({
+      data: { cameraId: req.params.cameraId, moduleId: req.params.moduleId },
+      include: { module: true },
+    });
+
+    res.status(201).json({ success: true, data: cameraModule });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to assign module' });
+  }
+});
+
+// DELETE /api/modules/camera/:cameraId/:moduleId
+router.delete('/camera/:cameraId/:moduleId', authenticate, authorize('Admin', 'Manager'), async (req: Request, res: Response) => {
+  try {
+    await prisma.cameraModule.delete({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+    });
+    res.json({ success: true, data: null });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to remove module' });
+  }
+});
+
+// PATCH /api/modules/camera/:cameraId/:moduleId/toggle
+router.patch('/camera/:cameraId/:moduleId/toggle', authenticate, authorize('Admin', 'Manager'), async (req: Request, res: Response) => {
+  try {
+    const existing = await prisma.cameraModule.findUnique({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+    });
+
+    if (!existing) {
+      res.status(404).json({ success: false, message: 'Camera module assignment not found' });
+      return;
+    }
+
+    const updated = await prisma.cameraModule.update({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+      data: { isEnabled: !existing.isEnabled },
+      include: { module: true },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to toggle module' });
+  }
+});
+
+export default router;

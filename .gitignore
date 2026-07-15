@@ -1,0 +1,34 @@
+# ── Credentials & Environment ─────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# ── go2rtc (sẽ chứa IP/password NVR thật) ────────────────────────────────────
+go2rtc.yaml
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ── Build output ──────────────────────────────────────────────────────────────
+dist/
+.next/
+out/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ── Internal tools ────────────────────────────────────────────────────────────
+.claude
+markdown/
+*.jsonl
+*.jsonl_Zone.Identifier

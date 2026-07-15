@@ -1,0 +1,221 @@
+{
+  "info": {
+    "name": "MonitoringAI - Demo",
+    "description": "Bộ test API cho nền tảng giám sát Camera AI. Chạy 'Auth - Login' trước để tự lưu {{token}}. Sự kiện/heartbeat dùng {{apiKey}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api" },
+    { "key": "token", "value": "" },
+    { "key": "apiKey", "value": "demo-camera-key-change-me" },
+    { "key": "cameraId", "value": "" },
+    { "key": "moduleId", "value": "" },
+    { "key": "alertId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth - Login (lưu token)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@monitoring.com\",\n  \"password\": \"Admin@123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json.success && json.data && json.data.token) {",
+              "  pm.collectionVariables.set('token', json.data.token);",
+              "  console.log('Token saved');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cameras - List (lưu cameraId đầu tiên)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/cameras?limit=100", "host": ["{{baseUrl}}"], "path": ["cameras"], "query": [{ "key": "limit", "value": "100" }] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json.success && json.data && json.data.length) {",
+              "  pm.collectionVariables.set('cameraId', json.data[0].id);",
+              "  console.log('cameraId =', json.data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Modules - List (lưu moduleId đầu tiên)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/modules", "host": ["{{baseUrl}}"], "path": ["modules"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json.success && json.data && json.data.length) {",
+              "  pm.collectionVariables.set('moduleId', json.data[0].id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Event - INTRUSION (alert, confidence 0.95)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"INTRUSION\",\n  \"confidence\": 0.95,\n  \"imageUrl\": \"/evidence/sample-intrusion.svg\",\n  \"videoUrl\": \"/evidence/TEST_CAM_1.mp4\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Event - FIRE (alert, confidence 0.9)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FIRE\",\n  \"confidence\": 0.9,\n  \"imageUrl\": \"/evidence/sample-fire.svg\"\n}" }
+      }
+    },
+    {
+      "name": "Event - SMOKE (alert)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"SMOKE\",\n  \"confidence\": 0.88,\n  \"imageUrl\": \"/evidence/sample-smoke.svg\"\n}" }
+      }
+    },
+    {
+      "name": "Event - PPE (log only, confidence 0.6)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"PPE\",\n  \"confidence\": 0.6,\n  \"imageUrl\": \"/evidence/sample-ppe.svg\"\n}" }
+      }
+    },
+    {
+      "name": "Event - FACE (log only, confidence 0.7)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FACE\",\n  \"confidence\": 0.7,\n  \"imageUrl\": \"/evidence/sample-face.svg\"\n}" }
+      }
+    },
+    {
+      "name": "Event - VEHICLE (alert)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-api-key", "value": "{{apiKey}}" }
+        ],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"VEHICLE\",\n  \"confidence\": 0.85,\n  \"imageUrl\": \"/evidence/sample-vehicle.svg\"\n}" }
+      }
+    },
+    {
+      "name": "Event - Thiếu API key (401)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"INTRUSION\",\n  \"confidence\": 0.95\n}" }
+      }
+    },
+    {
+      "name": "Camera - Heartbeat (ONLINE)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "x-api-key", "value": "{{apiKey}}" }],
+        "url": { "raw": "{{baseUrl}}/cameras/{{cameraId}}/heartbeat", "host": ["{{baseUrl}}"], "path": ["cameras", "{{cameraId}}", "heartbeat"] }
+      }
+    },
+    {
+      "name": "Events - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/events?limit=20", "host": ["{{baseUrl}}"], "path": ["events"], "query": [{ "key": "limit", "value": "20" }] }
+      }
+    },
+    {
+      "name": "Modules - Assign to camera",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/modules/camera/{{cameraId}}/{{moduleId}}", "host": ["{{baseUrl}}"], "path": ["modules", "camera", "{{cameraId}}", "{{moduleId}}"] }
+      }
+    },
+    {
+      "name": "Modules - Toggle on camera",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/modules/camera/{{cameraId}}/{{moduleId}}/toggle", "host": ["{{baseUrl}}"], "path": ["modules", "camera", "{{cameraId}}", "{{moduleId}}", "toggle"] }
+      }
+    },
+    {
+      "name": "Reports - Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/reports/dashboard", "host": ["{{baseUrl}}"], "path": ["reports", "dashboard"] }
+      }
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      }
+    }
+  ]
+}
