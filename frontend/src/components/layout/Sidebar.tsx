@@ -9,6 +9,7 @@ import {
   Cpu,
   LayoutDashboard,
   Monitor,
+  Radio,
   Shield,
   Users,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/live", label: "Live View", icon: Monitor },
   { href: "/cameras", label: "Cameras", icon: Camera },
+  { href: "/streams", label: "go2rtc Streams", icon: Radio },
   { href: "/modules", label: "AI Modules", icon: Cpu },
   { href: "/events", label: "Event Center", icon: AlertTriangle },
   { href: "/users", label: "Users", icon: Users },

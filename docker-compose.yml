@@ -8,7 +8,8 @@ services:
       - "1984:1984"       # HLS + Web API (browser cần truy cập trực tiếp)
       - "8554:8554"       # RTSP re-stream
     volumes:
-      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+      # read-write so stream changes made via the UI persist back to the yaml
+      - ./go2rtc.yaml:/config/go2rtc.yaml:rw
     restart: unless-stopped
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────────
@@ -36,11 +37,14 @@ services:
     container_name: monitoring_backend
     environment:
       DATABASE_URL: postgresql://monitoring:monitoring_pass@postgres:5432/smart_monitoring
+      GO2RTC_API_URL: http://go2rtc:1984
     env_file:
       - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy
+      go2rtc:
+        condition: service_started
     restart: unless-stopped
 
   # ── Frontend (Next.js) ─────────────────────────────────────────────────────────

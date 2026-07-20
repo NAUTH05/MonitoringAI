@@ -20,6 +20,7 @@ import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import cameraRoutes from './routes/cameras';
 import eventRoutes from './routes/events';
+import go2rtcRoutes from './routes/go2rtc';
 import healthRoutes from './routes/health';
 import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
@@ -80,6 +81,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/cameras', cameraRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/go2rtc', go2rtcRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/health', healthRoutes);
 
