@@ -24,27 +24,41 @@ Hệ thống giám sát camera AI - dark mode dashboard với realtime alerts.
 
 ## Cài đặt nhanh (Docker)
 
+**Bước 1 — Tải source về**
+
 ```bash
-# 1. Clone repo
 git clone https://github.com/NAUTH05/MonitoringAI.git
 cd MonitoringAI
+```
 
-# 2. Copy và điền config
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.local.example frontend/.env.local
-cp go2rtc.yaml.example go2rtc.yaml   # điền RTSP URL của NVR/camera
+**Bước 2 — Tạo 4 file cấu hình từ mẫu**
 
-# 3. Chỉnh SERVER_HOST trong .env (IP máy chủ)
+```bash
+cp .env.example .env                                 # cấu hình chung + SERVER_HOST
+cp backend/.env.example backend/.env                 # DB, JWT secret của backend
+cp frontend/.env.local.example frontend/.env.local   # API URL của frontend
+cp go2rtc.yaml.example go2rtc.yaml                    # file stream, để trống được
+```
 
-# 4. Khởi động
+Riêng `go2rtc.yaml`: **không bắt buộc điền RTSP URL bằng tay**. Cứ để nguyên file mẫu, sau khi hệ thống chạy bạn thêm/sửa link camera trực tiếp trong tab **go2rtc Streams** trên web.
+
+**Bước 3 — Đặt IP máy chủ**
+
+Mở `.env`, sửa `SERVER_HOST` thành IP nội bộ của máy đang chạy Docker (ví dụ `192.168.1.100`), không kèm `http://`.
+
+**Bước 4 — Khởi động toàn bộ dịch vụ**
+
+```bash
 docker compose up -d
+```
 
-# 5. Seed dữ liệu ban đầu (chạy 1 lần)
+**Bước 5 — Nạp dữ liệu ban đầu (chỉ chạy 1 lần)**
+
+```bash
 docker compose exec backend npm run db:seed
 ```
 
-Truy cập: `http://<SERVER_HOST>`
+Truy cập `http://<SERVER_HOST>`, đăng nhập, rồi vào tab **go2rtc Streams** để thêm link RTSP của NVR/camera.
 
 ## Triển khai lên server nội bộ doanh nghiệp
 
