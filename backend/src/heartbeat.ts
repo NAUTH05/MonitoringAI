@@ -38,5 +38,5 @@ export function startHeartbeatWatchdog(io: Server): void {
     }
   }, SCAN_INTERVAL);
 
-  console.log('❤️  Heartbeat watchdog started');
+  console.log('Heartbeat watchdog started');
 }

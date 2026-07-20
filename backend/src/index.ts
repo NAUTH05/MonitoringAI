@@ -1,10 +1,10 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import path from 'path';
 import fs from 'fs';
+import { createServer } from 'http';
+import path from 'path';
+import { Server } from 'socket.io';
 import swaggerUi from 'swagger-ui-express';
 import { openapiSpec } from './openapi';
 
@@ -16,6 +16,7 @@ if (!fs.existsSync(evidenceDir)) {
   fs.mkdirSync(evidenceDir, { recursive: true });
 }
 
+import { startHeartbeatWatchdog } from './heartbeat';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import cameraRoutes from './routes/cameras';
@@ -26,7 +27,6 @@ import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
 import userRoutes from './routes/users';
 import { initSocket } from './socket';
-import { startHeartbeatWatchdog } from './heartbeat';
 
 const app = express();
 const httpServer = createServer(app);
@@ -42,7 +42,7 @@ const corsOriginChecker = (origin: string | undefined, callback: (err: Error | n
     callback(null, true);
     return;
   }
-  const isAllowed = allowedOrigins.includes(origin) || 
+  const isAllowed = allowedOrigins.includes(origin) ||
     /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
   if (isAllowed) {
     callback(null, true);
@@ -92,5 +92,5 @@ startHeartbeatWatchdog(io);
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
