@@ -10,6 +10,7 @@ const cameraSchema = z.object({
   name: z.string().min(1).max(100),
   location: z.string().min(1).max(200),
   rtspUrl: z.string().min(1),
+  subRtspUrl: z.string().optional(),
   status: z.enum(['ONLINE', 'OFFLINE', 'ERROR']).optional(),
 });
 

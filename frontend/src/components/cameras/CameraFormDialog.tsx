@@ -19,6 +19,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
     name: camera?.name ?? "",
     location: camera?.location ?? "",
     rtspUrl: camera?.rtspUrl ?? "",
+    subRtspUrl: camera?.subRtspUrl ?? "",
     status: (camera?.status ?? "OFFLINE") as CameraStatus,
   });
 
@@ -100,6 +101,21 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
               placeholder="e.g. http://localhost:8080/stream.m3u8 hoặc rtsp://..."
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
             />
+            <p className="text-[11px] text-gray-500 mt-1">Luồng chính (main). Dạng .../stream.m3u8?src=NAME.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>Sub Stream URL</span>
+              <span className="text-[10px] text-gray-500 font-normal uppercase tracking-wider">Tùy chọn</span>
+            </label>
+            <input
+              value={form.subRtspUrl}
+              onChange={(e) => setForm({ ...form, subRtspUrl: e.target.value })}
+              placeholder="e.g. .../stream.m3u8?src=nvr_ch1_sub"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Luồng phụ nhẹ hơn. Có nút đổi main/sub khi xem.</p>
           </div>
 
           <div>

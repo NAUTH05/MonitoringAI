@@ -42,3 +42,4 @@ start-manual.ps1
 # ── Stray root-level npm files (real manifests live in backend/ and frontend/) ───
 /package.json
 /package-lock.json
+opencode.json

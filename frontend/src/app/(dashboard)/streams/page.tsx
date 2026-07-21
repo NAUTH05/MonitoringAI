@@ -184,6 +184,18 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
     name: stream?.name ?? "",
     src: stream?.sources[0] ?? "",
   });
+  const [creds, setCreds] = useState({ user: "", pass: "" });
+
+  // Inject user:pass into an rtsp:// (or ffmpeg:rtsp://) source that has no auth yet.
+  const buildSrc = (): string => {
+    let src = form.src.trim();
+    const { user, pass } = creds;
+    if (user && pass) {
+      const auth = `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@`;
+      src = src.replace(/^(ffmpeg:)?rtsp:\/\/(?!.*@)/i, (_m, ff) => `${ff ?? ""}rtsp://${auth}`);
+    }
+    return src;
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -191,7 +203,10 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
     setLoading(true);
     try {
       // PUT overwrites by name, so it handles both add and edit.
-      await api.put<ApiResponse<unknown>>("/go2rtc/streams", form);
+      await api.put<ApiResponse<unknown>>("/go2rtc/streams", {
+        name: form.name,
+        src: buildSrc(),
+      });
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save stream");
@@ -257,6 +272,37 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
             />
             <p className="text-[11px] text-gray-500 mt-1">
               H265 (Hikvision): dùng <code className="text-gray-400">ffmpeg:rtsp://...#video=h264</code> để transcode sang H264.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Username
+              </label>
+              <input
+                value={creds.user}
+                onChange={(e) => setCreds({ ...creds, user: e.target.value })}
+                placeholder="admin"
+                autoComplete="off"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                value={creds.pass}
+                onChange={(e) => setCreds({ ...creds, pass: e.target.value })}
+                placeholder="••••••"
+                autoComplete="new-password"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+              />
+            </div>
+            <p className="col-span-2 text-[11px] text-gray-500 -mt-1">
+              Nhập user/pass nếu URL RTSP chưa có. Sẽ được chèn dạng rtsp://user:pass@host.
             </p>
           </div>
 

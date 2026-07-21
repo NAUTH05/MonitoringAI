@@ -42,6 +42,7 @@ model Camera {
   name          String
   location      String
   rtspUrl       String         @map("rtsp_url")
+  subRtspUrl    String?        @map("sub_rtsp_url")
   status        CameraStatus   @default(OFFLINE)
   isActive      Boolean        @default(true) @map("is_active")
   lastHeartbeat DateTime?      @map("last_heartbeat")

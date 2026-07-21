@@ -3,16 +3,26 @@
 import { CameraFeed } from "@/components/cameras/CameraFeed";
 import { useSocket } from "@/hooks/useSocket";
 import { api } from "@/lib/api";
+import {
+  captureFrameLocal,
+  captureFrameServer,
+  recordLocal,
+  recordServer,
+} from "@/lib/capture";
+import { liveCache } from "@/lib/liveCache";
 import { formatDate } from "@/lib/utils";
 import { Camera, CameraStatus, Event } from "@/types";
 import {
   AlertTriangle,
+  Camera as CameraIcon,
   GripVertical,
+  Grid2x2,
   Monitor,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   RotateCcw,
+  Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layout, Layouts, Responsive, WidthProvider } from "react-grid-layout";
@@ -79,22 +89,42 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
   return result;
 }
 
+// Pull the go2rtc stream name out of a camera URL (mirrors CameraFeed).
+function streamNameOf(url?: string): string | null {
+  if (!url) return null;
+  const m = url.match(/[?&]src=([^&]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  if (url.startsWith("rtsp://")) return null;
+  if (/^[\w.-]+$/.test(url.trim())) return url.trim();
+  return null;
+}
+
 export default function LiveViewPage() {
-  const [cameras, setCameras] = useState<Camera[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seed from module cache so returning to /live paints instantly (no cold-start).
+  const [cameras, setCameras] = useState<Camera[]>(() => liveCache.getCameras() ?? []);
+  const [loading, setLoading] = useState(() => liveCache.getCameras() === null);
   const [error, setError] = useState("");
 
-  const [layouts, setLayouts] = useState<Layouts | null>(null);
-  const savedLayoutRef = useRef<Layouts | null>(null);
+  const [layouts, setLayouts] = useState<Layouts | null>(() => liveCache.getLayouts());
+  const savedLayoutRef = useRef<Layouts | null>(liveCache.getLayouts());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [activeEvents, setActiveEvents] = useState<Record<string, Event>>({});
   const [eventLog, setEventLog] = useState<Event[]>([]);
   const [showFeed, setShowFeed] = useState(true);
+  const [uniform, setUniform] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
-  // Restore feed-panel preference.
+  // Live <video> elements by camera id, for capture/record.
+  const videoEls = useRef<Record<string, HTMLVideoElement | null>>({});
+  const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
+    videoEls.current[id] = el;
+  }, []);
+
+  // Restore preferences.
   useEffect(() => {
     setShowFeed(localStorage.getItem("liveShowFeed") !== "0");
+    setUniform(localStorage.getItem("liveUniform") === "1");
   }, []);
 
   const toggleFeed = useCallback(() => {
@@ -105,12 +135,23 @@ export default function LiveViewPage() {
     });
   }, []);
 
+  const toggleUniform = useCallback(() => {
+    setUniform((prev) => {
+      const next = !prev;
+      localStorage.setItem("liveUniform", next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
   const fetchCameras = useCallback(async () => {
     try {
       const res = await api.get<{ success: boolean; data: Camera[] }>(
         "/cameras?limit=100",
       );
-      if (res.success) setCameras(res.data);
+      if (res.success) {
+        setCameras(res.data);
+        liveCache.setCameras(res.data);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cameras");
     } finally {
@@ -165,10 +206,31 @@ export default function LiveViewPage() {
     (_current: Layout[], all: Layouts) => {
       setLayouts(all);
       savedLayoutRef.current = all;
+      liveCache.setLayouts(all);
       persistLayout(all);
     },
     [persistLayout],
   );
+
+  // When uniform mode is on, force every tile to the default footprint.
+  const displayLayouts = useMemo<Layouts | null>(() => {
+    if (!layouts) return null;
+    if (!uniform) return layouts;
+    const out = {} as Layouts;
+    (Object.keys(COLS) as BP[]).forEach((bp) => {
+      const w = DEFAULT_W[bp];
+      const cols = COLS[bp];
+      const perRow = Math.max(1, Math.floor(cols / w));
+      out[bp] = (layouts[bp] ?? []).map((it, idx) => ({
+        ...it,
+        x: (idx % perRow) * w,
+        y: Math.floor(idx / perRow) * DEFAULT_H,
+        w,
+        h: DEFAULT_H,
+      }));
+    });
+    return out;
+  }, [layouts, uniform]);
 
   const resetLayout = useCallback(() => {
     const fresh = mergeLayouts(null, cameras);
@@ -210,6 +272,44 @@ export default function LiveViewPage() {
   };
 
   const clearAllAlerts = () => setActiveEvents({});
+
+  // Run capture or record over a chosen set of cameras, locally or on the server.
+  const runCapture = useCallback(
+    async (
+      ids: string[],
+      action: "snapshot" | "record",
+      saveMode: "local" | "server",
+      seconds: number,
+    ) => {
+      const results: string[] = [];
+      for (const id of ids) {
+        const cam = cameras.find((c) => c.id === id);
+        if (!cam) continue;
+        const name = streamNameOf(cam.rtspUrl) ?? streamNameOf(cam.subRtspUrl);
+        try {
+          if (saveMode === "local") {
+            const el = videoEls.current[id];
+            if (!el) continue;
+            if (action === "snapshot") captureFrameLocal(el, cam.name);
+            else recordLocal(el, cam.name, seconds * 1000);
+          } else if (name) {
+            const url =
+              action === "snapshot"
+                ? await captureFrameServer(name)
+                : await recordServer(name, seconds);
+            results.push(url);
+          }
+        } catch (err) {
+          console.error(`Capture failed for ${cam.name}:`, err);
+        }
+      }
+      if (saveMode === "server" && action === "record") {
+        // Server record blocks until ffmpeg finishes; give feedback.
+        alert(`Đã lưu ${results.length} bản ghi vào server (evidence/).`);
+      }
+    },
+    [cameras],
+  );
 
   const onlineCount = useMemo(
     () => cameras.filter((c) => c.status === "ONLINE").length,
@@ -270,6 +370,24 @@ export default function LiveViewPage() {
               </button>
             )}
             <button
+              onClick={() => setCaptureOpen(true)}
+              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
+              title="Record / Capture"
+            >
+              <Video className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={toggleUniform}
+              className={`p-1.5 border rounded-md transition ${
+                uniform
+                  ? "border-blue-700 text-blue-400 bg-blue-950/40"
+                  : "border-neutral-800 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+              }`}
+              title={uniform ? "Kích thước đồng bộ (bật)" : "Kích thước đồng bộ (tắt)"}
+            >
+              <Grid2x2 className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={resetLayout}
               className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
               title="Reset layout"
@@ -308,10 +426,10 @@ export default function LiveViewPage() {
               </p>
             </div>
           ) : (
-            layouts && (
+            displayLayouts && (
               <ResponsiveGridLayout
                 className="layout"
-                layouts={layouts}
+                layouts={displayLayouts}
                 breakpoints={BREAKPOINTS}
                 cols={COLS}
                 rowHeight={70}
@@ -321,6 +439,7 @@ export default function LiveViewPage() {
                 onLayoutChange={handleLayoutChange}
                 compactType="vertical"
                 preventCollision={false}
+                isResizable={!uniform}
                 isBounded
               >
                 {cameras.map((camera) => (
@@ -339,6 +458,7 @@ export default function LiveViewPage() {
                         camera={camera}
                         activeEvent={activeEvents[camera.id]}
                         onClearEvent={() => clearCameraEvent(camera.id)}
+                        onVideoRef={registerVideo}
                       />
                     </div>
                   </div>
@@ -408,6 +528,144 @@ export default function LiveViewPage() {
           </div>
         </div>
       )}
+
+      {captureOpen && (
+        <CaptureDialog
+          cameras={cameras}
+          onClose={() => setCaptureOpen(false)}
+          onRun={runCapture}
+        />
+      )}
+    </div>
+  );
+}
+
+interface CaptureDialogProps {
+  cameras: Camera[];
+  onClose: () => void;
+  onRun: (
+    ids: string[],
+    action: "snapshot" | "record",
+    saveMode: "local" | "server",
+    seconds: number,
+  ) => Promise<void>;
+}
+
+function CaptureDialog({ cameras, onClose, onRun }: CaptureDialogProps) {
+  const online = cameras.filter((c) => c.status === "ONLINE");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [action, setAction] = useState<"snapshot" | "record">("snapshot");
+  const [saveMode, setSaveMode] = useState<"local" | "server">("local");
+  const [seconds, setSeconds] = useState(10);
+  const [busy, setBusy] = useState(false);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const run = async () => {
+    if (selected.size === 0) return;
+    setBusy(true);
+    await onRun(Array.from(selected), action, saveMode, seconds);
+    setBusy(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-neutral-800 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Video className="w-4 h-4" /> Record / Capture
+          </h2>
+          <button onClick={onClose} className="text-neutral-400 hover:text-white text-sm">✕</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Action */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAction("snapshot")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm border ${action === "snapshot" ? "border-blue-600 bg-blue-950/40 text-blue-300" : "border-neutral-700 text-neutral-400"}`}
+            >
+              <CameraIcon className="w-4 h-4" /> Ảnh
+            </button>
+            <button
+              onClick={() => setAction("record")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm border ${action === "record" ? "border-blue-600 bg-blue-950/40 text-blue-300" : "border-neutral-700 text-neutral-400"}`}
+            >
+              <Video className="w-4 h-4" /> Video
+            </button>
+          </div>
+
+          {action === "record" && (
+            <div className="flex items-center gap-2 text-sm text-neutral-300">
+              <span>Thời lượng</span>
+              <input
+                type="number"
+                min={1}
+                max={300}
+                value={seconds}
+                onChange={(e) => setSeconds(Math.min(300, Math.max(1, parseInt(e.target.value) || 1)))}
+                className="w-20 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-white"
+              />
+              <span>giây</span>
+            </div>
+          )}
+
+          {/* Save mode */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSaveMode("local")}
+              className={`flex-1 py-2 rounded-lg text-sm border ${saveMode === "local" ? "border-blue-600 bg-blue-950/40 text-blue-300" : "border-neutral-700 text-neutral-400"}`}
+            >
+              Lưu về máy
+            </button>
+            <button
+              onClick={() => setSaveMode("server")}
+              className={`flex-1 py-2 rounded-lg text-sm border ${saveMode === "server" ? "border-blue-600 bg-blue-950/40 text-blue-300" : "border-neutral-700 text-neutral-400"}`}
+            >
+              Lưu server
+            </button>
+          </div>
+
+          {/* Camera list */}
+          <div className="border border-neutral-800 rounded-lg max-h-52 overflow-y-auto divide-y divide-neutral-800">
+            {online.length === 0 ? (
+              <p className="text-neutral-500 text-sm p-3 text-center">Không có camera online</p>
+            ) : (
+              online.map((c) => (
+                <label key={c.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-neutral-800/40">
+                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} className="accent-blue-600" />
+                  <span className="text-sm text-neutral-200 truncate">{c.name}</span>
+                  <span className="text-[11px] text-neutral-500 ml-auto truncate">{c.location}</span>
+                </label>
+              ))
+            )}
+          </div>
+          <button
+            onClick={() => setSelected(new Set(online.map((c) => c.id)))}
+            className="text-[11px] text-blue-400 hover:underline"
+          >
+            Chọn tất cả
+          </button>
+
+          <button
+            onClick={run}
+            disabled={busy || selected.size === 0}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-700 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition text-sm"
+          >
+            {busy ? "Đang xử lý..." : `Thực hiện (${selected.size} camera)`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

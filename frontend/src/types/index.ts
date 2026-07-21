@@ -42,6 +42,7 @@ export interface Camera {
   name: string;
   location: string;
   rtspUrl: string;
+  subRtspUrl?: string;
   status: CameraStatus;
   isActive: boolean;
   lastHeartbeat?: string;
