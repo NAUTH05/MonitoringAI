@@ -4,7 +4,7 @@ import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
 
-const GO2RTC_API_URL = (process.env.GO2RTC_API_URL || 'http://go2rtc:1984').replace(/\/$/, '');
+const GO2RTC_API_URL = (process.env.GO2RTC_API_URL || 'http://localhost:1984').replace(/\/$/, '');
 
 const streamSchema = z.object({
   name: z.string().min(1).max(100),
