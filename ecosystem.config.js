@@ -1,4 +1,4 @@
-// PM2 process manager — backend + frontend (native, không Docker)
+// PM2 process manager — backend + frontend
 // Dùng:  pm2 start ecosystem.config.js  &&  pm2 save  &&  pm2 startup systemd
 // go2rtc và PostgreSQL chạy dạng systemd service riêng (xem deploy/DEPLOY_LINUX.md).
 module.exports = {

@@ -36,7 +36,7 @@ markdown/
 DEPLOY_MANUAL.md
 start-manual.ps1
 
-# ── Windows go2rtc binary (Docker uses the alexxit/go2rtc image) ─────────────────
+# ── Windows go2rtc binary ─────────────────────────────────────────────────────
 /go2rtc.exe
 
 # ── Stray root-level npm files (real manifests live in backend/ and frontend/) ───

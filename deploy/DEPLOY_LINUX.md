@@ -1,4 +1,4 @@
-# Triển khai monitoringAI native (không Docker) trên Ubuntu/Debian
+# Triển khai monitoringAI trên Ubuntu/Debian
 
 Chạy 100% native với **PM2** (backend + frontend), **nginx** cổng 80, **go2rtc** systemd.
 PostgreSQL 16 đã có sẵn trên server.
@@ -60,7 +60,6 @@ SQL
 ```
 
 Mật khẩu phải khớp `DATABASE_URL` trong `backend/.env`.
-Nếu migrate dữ liệu cũ từ Docker: dump từ container cũ rồi `psql ... < backup.sql` thay cho bước seed.
 
 ## 3. Build + seed backend
 

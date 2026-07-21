@@ -11,7 +11,7 @@ Hệ thống giám sát camera AI - dark mode dashboard với realtime alerts.
 | Database | PostgreSQL |
 | Realtime | Socket.IO |
 | Stream Gateway | go2rtc (RTSP → HLS) |
-| Infra | Docker Compose, Nginx |
+| Infra | PM2, Nginx, systemd |
 
 ## Tính năng chính
 
@@ -20,9 +20,14 @@ Hệ thống giám sát camera AI - dark mode dashboard với realtime alerts.
 
 ## Yêu cầu
 
-- Docker + Docker Compose
+- Node.js 20 LTS
+- PostgreSQL 16
+- Nginx
+- PM2 (`npm i -g pm2`)
+- ffmpeg (go2rtc dùng để transcode H265→H264)
+- go2rtc binary ([releases](https://github.com/AlexxIT/go2rtc/releases))
 
-## Cài đặt nhanh (Docker)
+## Cài đặt nhanh
 
 **Bước 1 — Tải source về**
 
@@ -31,10 +36,9 @@ git clone https://github.com/NAUTH05/MonitoringAI.git
 cd MonitoringAI
 ```
 
-**Bước 2 — Tạo 4 file cấu hình từ mẫu**
+**Bước 2 — Tạo file cấu hình từ mẫu**
 
 ```bash
-cp .env.example .env                                 # cấu hình chung + SERVER_HOST
 cp backend/.env.example backend/.env                 # DB, JWT secret của backend
 cp frontend/.env.local.example frontend/.env.local   # API URL của frontend
 cp go2rtc.yaml.example go2rtc.yaml                    # file stream, để trống được
@@ -42,99 +46,62 @@ cp go2rtc.yaml.example go2rtc.yaml                    # file stream, để trố
 
 Riêng `go2rtc.yaml`: **không bắt buộc điền RTSP URL bằng tay**. Cứ để nguyên file mẫu, sau khi hệ thống chạy bạn thêm/sửa link camera trực tiếp trong tab **go2rtc Streams** trên web.
 
-**Bước 3 — Đặt IP máy chủ**
-
-Mở `.env`, sửa `SERVER_HOST` thành IP nội bộ của máy đang chạy Docker (ví dụ `192.168.1.100`), không kèm `http://`.
-
-**Bước 4 — Khởi động toàn bộ dịch vụ**
+**Bước 3 — Cài dependencies & build**
 
 ```bash
-docker compose up -d
+# Backend
+cd backend
+npm ci
+npx prisma generate
+npm run db:push        # tạo schema
+npm run db:seed        # tạo user/dữ liệu mẫu
+npm run build          # tsc -> dist/
+cd ..
+
+# Frontend
+cd frontend
+npm ci
+npm run build
+cd ..
 ```
 
-**Bước 5 — Nạp dữ liệu ban đầu (chỉ chạy 1 lần)**
+**Bước 4 — Cấu hình nginx**
 
 ```bash
-docker compose exec backend npm run db:seed
+sudo cp nginx/monitoring.conf /etc/nginx/sites-available/monitoring
+sudo ln -s /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Truy cập `http://<SERVER_HOST>`, đăng nhập, rồi vào tab **go2rtc Streams** để thêm link RTSP của NVR/camera.
+**Bước 5 — Khởi động go2rtc**
+
+```bash
+# Linux: tải binary từ GitHub releases, đặt cạnh go2rtc.yaml
+chmod +x go2rtc
+# Hoặc dùng systemd service (xem deploy/DEPLOY_LINUX.md)
+
+# Windows: dùng go2rtc.exe có sẵn trong repo
+./go2rtc.exe
+```
+
+**Bước 6 — Khởi động backend + frontend bằng PM2**
+
+```bash
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup systemd    # chạy lệnh sudo mà nó in ra để tự khởi động sau reboot
+```
+
+Truy cập `http://<SERVER_IP>`, đăng nhập, rồi vào tab **go2rtc Streams** để thêm link RTSP của NVR/camera.
 
 ## Triển khai lên server nội bộ doanh nghiệp
 
-Hướng dẫn đầy đủ cho server Linux (Ubuntu/Debian 22.04+) hoặc Windows Server có Docker.
+Xem hướng dẫn đầy đủ tại [`deploy/DEPLOY_LINUX.md`](deploy/DEPLOY_LINUX.md) cho server Ubuntu/Debian.
 
-### Bước 1 — Chuẩn bị server
+### Yêu cầu tối thiểu
 
-Yêu cầu tối thiểu: 2 vCPU, 4 GB RAM, 40 GB disk (nhiều hơn nếu lưu ảnh events/nhiều camera transcode H265).
-
-Cài Docker Engine + Compose plugin (Ubuntu):
-
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # đăng nhập lại để áp dụng
-docker compose version          # xác nhận có Compose v2
-```
-
-### Bước 2 — Lấy source
-
-```bash
-git clone https://github.com/NAUTH05/MonitoringAI.git
-cd MonitoringAI
-```
-
-### Bước 3 — Tạo file cấu hình
-
-```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.local.example frontend/.env.local
-cp go2rtc.yaml.example go2rtc.yaml
-```
-
-Sửa các giá trị bắt buộc:
-
-`.env` (dùng khi build frontend + compose):
-```
-SERVER_HOST=192.168.1.100        # IP nội bộ (hoặc domain) của server, KHÔNG kèm http://
-```
-
-`backend/.env` — đổi toàn bộ secret trước khi lên production:
-```
-DATABASE_URL="postgresql://monitoring:monitoring_pass@postgres:5432/smart_monitoring"
-JWT_SECRET="<chuỗi-ngẫu-nhiên-dài, ví dụ: openssl rand -hex 32>"
-CAMERA_API_KEY="<key-riêng-cho-camera-AI>"
-FRONTEND_URL="http://192.168.1.100"
-NODE_ENV="production"
-GO2RTC_API_URL="http://go2rtc:1984"   # để nguyên, đây là địa chỉ nội bộ giữa các container
-```
-
-Lưu ý bảo mật: đổi luôn `POSTGRES_PASSWORD` trong `docker-compose.yml` và `DATABASE_URL` tương ứng nếu server truy cập được từ mạng rộng.
-
-### Bước 4 — Cấu hình stream ban đầu (tuỳ chọn)
-
-Điền RTSP của NVR vào `go2rtc.yaml` (xem mục "Cấu hình go2rtc" bên dưới). Có thể để trống và thêm sau bằng tab **go2rtc Streams** trên web. File này được mount read-write nên thay đổi từ UI sẽ ghi vĩnh viễn vào file, sống sót qua restart container.
-
-### Bước 5 — Build và khởi động
-
-```bash
-docker compose build          # build image backend + frontend
-docker compose up -d          # chạy nền toàn bộ stack
-docker compose ps             # kiểm tra tất cả service Up
-```
-
-`SERVER_HOST` được nhúng vào frontend lúc build (biến `NEXT_PUBLIC_*`). Nếu sau này đổi IP server, phải build lại frontend: `docker compose build frontend && docker compose up -d frontend`.
-
-### Bước 6 — Khởi tạo database (chạy 1 lần)
-
-```bash
-docker compose exec backend npm run db:push    # tạo schema
-docker compose exec backend npm run db:seed    # tạo user/dữ liệu mẫu
-```
-
-### Bước 7 — Truy cập
-
-Mở `http://<SERVER_HOST>` (port 80 qua Nginx). Đăng nhập bằng tài khoản seed, đổi mật khẩu ngay.
+2 vCPU, 4 GB RAM, 40 GB disk (nhiều hơn nếu lưu ảnh events/nhiều camera transcode H265).
 
 ### Mở port trên firewall nội bộ
 
@@ -145,38 +112,31 @@ Mở `http://<SERVER_HOST>` (port 80 qua Nginx). Đăng nhập bằng tài kho�
 | 8554 | RTSP re-stream | Tuỳ chọn |
 | 5432 | PostgreSQL | Không (chỉ mở nếu cần truy cập DB từ ngoài) |
 
-Ví dụ (ufw):
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 1984/tcp
-```
-
 ### Vận hành
 
 ```bash
-docker compose logs -f backend        # xem log
-docker compose restart backend        # restart 1 service
-docker compose down                   # dừng (giữ dữ liệu DB trong volume)
-docker compose pull && docker compose up -d   # cập nhật image bên thứ 3
+pm2 logs monitoring-backend        # xem log
+pm2 restart monitoring-backend     # restart 1 service
+sudo journalctl -u go2rtc -f       # log go2rtc
 ```
 
 Cập nhật code mới:
 ```bash
 git pull
-docker compose build backend frontend
-docker compose up -d
+cd backend && npm ci && npm run build && cd ..
+cd frontend && npm ci && npm run build && cd ..
+pm2 restart all
 ```
 
 Sao lưu database:
 ```bash
-docker compose exec postgres pg_dump -U monitoring smart_monitoring > backup_$(date +%F).sql
+pg_dump -U monitoring smart_monitoring > backup_$(date +%F).sql
 ```
 
 ## Cài đặt local (dev)
 
 ```bash
-# Khởi động postgres + go2rtc
-docker compose up postgres go2rtc -d
+# Cần PostgreSQL đang chạy trên máy (localhost:5432)
 
 # Backend
 cd backend
@@ -191,6 +151,11 @@ cd frontend
 cp .env.local.example .env.local
 npm install
 npm run dev
+
+# go2rtc (terminal khác) — Windows:
+./go2rtc.exe
+# Linux: tải binary từ GitHub releases
+./go2rtc
 ```
 
 ## Cấu hình Camera AI → Push Events
