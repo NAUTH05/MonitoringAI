@@ -52,8 +52,8 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://${SERVER_HOST:-localhost}/api
-        NEXT_PUBLIC_SOCKET_URL: http://${SERVER_HOST:-localhost}
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_SOCKET_URL: ""
         NEXT_PUBLIC_GO2RTC_URL: http://${SERVER_HOST:-localhost}:1984
     container_name: monitoring_frontend
     depends_on:

@@ -104,7 +104,7 @@ export function EventDetailDialog({
               {event.imageUrl && (
                 <div className="rounded-xl overflow-hidden border border-gray-800 bg-gray-950 aspect-video relative group">
                   <img
-                    src={event.imageUrl.startsWith("http") ? event.imageUrl : `${process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000"}${event.imageUrl}`}
+                    src={event.imageUrl}
                     alt="AI Event Evidence"
                     className="w-full h-full object-contain"
                     onError={(e) => {
@@ -126,7 +126,7 @@ export function EventDetailDialog({
               {event.videoUrl && (
                 <div className="rounded-xl overflow-hidden border border-gray-800 bg-gray-950 p-1">
                   <video
-                    src={event.videoUrl.startsWith("http") ? event.videoUrl : `${process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000"}${event.videoUrl}`}
+                    src={event.videoUrl}
                     controls
                     className="w-full rounded-lg"
                     onError={(e) => {
