@@ -23,6 +23,7 @@ import cameraRoutes from './routes/cameras';
 import eventRoutes from './routes/events';
 import go2rtcRoutes from './routes/go2rtc';
 import healthRoutes from './routes/health';
+import layoutRoutes from './routes/layout';
 import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
 import userRoutes from './routes/users';
@@ -84,6 +85,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/go2rtc', go2rtcRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/layout', layoutRoutes);
 
 app.use(errorHandler);
 

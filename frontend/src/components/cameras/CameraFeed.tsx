@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Event } from "@/types";
-import { AlertTriangle, Activity, Volume2, VolumeX, ShieldAlert, Cpu } from "lucide-react";
+import { Volume2, VolumeX, ShieldAlert, Cpu } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 
@@ -32,7 +32,7 @@ const isWebPlayable = (url: string): boolean => {
 
 export function CameraFeed({
   camera,
-  showScanlines = true,
+  showScanlines = false,
   activeEvent,
   onClearEvent,
 }: CameraFeedProps) {
@@ -412,16 +412,16 @@ export function CameraFeed({
 
   return (
     <div
-      className={`relative rounded-xl overflow-hidden border transition-all duration-300 bg-gray-950 flex flex-col group ${
+      className={`relative rounded-b-lg overflow-hidden border h-full transition-colors bg-black flex flex-col group ${
         activeEvent
           ? activeEvent.isAlert
-            ? "border-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
-            : "border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]"
-          : "border-gray-800 hover:border-gray-700"
+            ? "border-red-700"
+            : "border-orange-600"
+          : "border-neutral-800"
       }`}
     >
       {/* Canvas Video Stream Container */}
-      <div className="relative flex-1 aspect-video w-full bg-slate-950">
+      <div className="relative flex-1 min-h-0 w-full bg-black">
         <canvas
           ref={canvasRef}
           width={640}
@@ -480,34 +480,36 @@ export function CameraFeed({
       </div>
 
       {/* Camera Panel Info Bar */}
-      <div className="p-3 bg-gray-900 border-t border-gray-800 flex items-center justify-between text-xs">
-        <div className="min-w-0">
-          <p className="font-medium text-white truncate">{camera.name}</p>
-          <p className="text-gray-400 truncate text-[11px]">{camera.location}</p>
-        </div>
+      <div className="px-3 py-2 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between text-xs shrink-0">
+        <p className="text-neutral-500 truncate text-[11px]">{camera.location}</p>
         <div className="flex items-center gap-2 shrink-0">
           {camera.status === "ONLINE" ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-              <Activity className="w-3 h-3 animate-pulse" />
-              Active
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-neutral-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Online
             </span>
           ) : (
             <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                camera.status === "ERROR"
-                  ? "bg-red-500/10 text-red-400 border-red-500/20"
-                  : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+              className={`inline-flex items-center gap-1.5 text-[10px] ${
+                camera.status === "ERROR" ? "text-red-400" : "text-neutral-500"
               }`}
             >
-              <AlertTriangle className="w-3 h-3" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  camera.status === "ERROR" ? "bg-red-500" : "bg-neutral-600"
+                }`}
+              />
               {camera.status}
             </span>
           )}
 
           {camera.cameraModules && camera.cameraModules.length > 0 && (
-            <div className="flex gap-0.5" title={`${camera.cameraModules.length} AI Modules enabled`}>
-              <Cpu className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-gray-400 text-[10px] font-bold">{camera.cameraModules.length}</span>
+            <div
+              className="flex items-center gap-0.5 text-neutral-500"
+              title={`${camera.cameraModules.length} AI Modules enabled`}
+            >
+              <Cpu className="w-3 h-3" />
+              <span className="text-[10px]">{camera.cameraModules.length}</span>
             </div>
           )}
         </div>

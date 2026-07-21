@@ -19,7 +19,7 @@ router.get('/', authenticate, async (_req: Request, res: Response) => {
 
     let dbStatus = 'OK';
     try {
-      await prisma.$runCommandRaw({ ping: 1 });
+      await prisma.$queryRaw`SELECT 1`;
     } catch (error) {
       console.error('Database Health Check Error:', error);
       dbStatus = 'ERROR';

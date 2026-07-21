@@ -32,3 +32,13 @@ desktop.ini
 markdown/
 *.jsonl
 *.jsonl_Zone.Identifier
+
+DEPLOY_MANUAL.md
+start-manual.ps1
+
+# ── Windows go2rtc binary (Docker uses the alexxit/go2rtc image) ─────────────────
+/go2rtc.exe
+
+# ── Stray root-level npm files (real manifests live in backend/ and frontend/) ───
+/package.json
+/package-lock.json

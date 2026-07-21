@@ -34,14 +34,43 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-gray-900;
+    @apply bg-neutral-950;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700 rounded-full;
+    @apply bg-neutral-800 rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-600;
+    @apply bg-neutral-700;
   }
+}
+
+/* react-grid-layout dark / minimalist overrides */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(115, 115, 115, 0.15);
+  border: 1px dashed rgb(82, 82, 82);
+  border-radius: 0.5rem;
+  opacity: 1;
+}
+
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.react-grid-item:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-right-color: rgb(115, 115, 115);
+  border-bottom-color: rgb(115, 115, 115);
+  width: 7px;
+  height: 7px;
+}
+
+.react-grid-item.react-draggable-dragging,
+.react-grid-item.resizing {
+  z-index: 20;
 }

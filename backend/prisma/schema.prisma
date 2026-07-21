@@ -131,6 +131,16 @@ model Alert {
   @@index([createdAt])
 }
 
+model DashboardLayout {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  layout    Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dashboard_layouts")
+}
+
 model SystemLog {
   id        String   @id @default(uuid())
   level     String
