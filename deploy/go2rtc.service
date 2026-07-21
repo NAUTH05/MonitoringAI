@@ -1,0 +1,16 @@
+[Unit]
+Description=go2rtc streaming gateway (monitoringAI)
+After=network.target
+
+[Service]
+Type=simple
+# Đổi User và các đường dẫn cho khớp môi trường server:
+User=monitoring
+WorkingDirectory=/opt/monitoringAI
+# go2rtc phải GHI được go2rtc.yaml (UI ghi thay đổi stream ngược lại file này).
+ExecStart=/opt/monitoringAI/go2rtc -config /opt/monitoringAI/go2rtc.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
