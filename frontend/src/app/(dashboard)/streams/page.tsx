@@ -3,11 +3,67 @@
 import { api } from "@/lib/api";
 import { ApiResponse } from "@/types";
 import { Loader2, Pencil, Plus, Radio, RefreshCw, Trash2, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, MouseEvent, useCallback, useEffect, useState } from "react";
 
 interface Go2rtcStream {
   name: string;
   sources: string[];
+}
+
+interface StreamFields {
+  user: string;
+  pass: string;
+  host: string;
+  channels: string;
+  format: string;
+  rawUrl: string;
+}
+
+const emptyStream = (): StreamFields => ({
+  user: "",
+  pass: "",
+  host: "",
+  channels: "",
+  format: "",
+  rawUrl: "",
+});
+
+function parseStream(url?: string): StreamFields {
+  const parsed = emptyStream();
+  if (!url) return parsed;
+
+  const value = url.trim();
+  const withoutPrefix = value.replace(/^ffmpeg:/i, "");
+  if (!withoutPrefix.toLowerCase().startsWith("rtsp://")) return { ...parsed, rawUrl: value };
+
+  try {
+    const u = new URL(withoutPrefix);
+    return {
+      user: decodeURIComponent(u.username),
+      pass: decodeURIComponent(u.password),
+      host: u.host,
+      channels: u.pathname.replace(/^\//, ""),
+      format: u.hash,
+      rawUrl: "",
+    };
+  } catch {
+    return { ...parsed, rawUrl: value };
+  }
+}
+
+function buildStream(fields: StreamFields): string {
+  const raw = fields.rawUrl.trim();
+  if (!fields.host.trim()) return raw;
+
+  const user = fields.user.trim();
+  const pass = fields.pass.trim();
+  const auth = user
+    ? `${encodeURIComponent(user)}${pass ? `:${encodeURIComponent(pass)}` : ""}@`
+    : "";
+  const channels = fields.channels.trim().replace(/^\/+/, "");
+  const format = fields.format.trim();
+  const suffix = format ? (format.startsWith("#") ? format : `#${format}`) : "";
+  return `rtsp://${auth}${fields.host.trim()}${channels ? `/${channels}` : ""}${suffix}`;
 }
 
 export default function StreamsPage() {
@@ -117,14 +173,7 @@ export default function StreamsPage() {
                       {s.sources.length === 0 ? (
                         <span className="text-gray-500">—</span>
                       ) : (
-                        s.sources.map((src, i) => (
-                          <code
-                            key={i}
-                            className="block text-xs text-gray-400 font-mono break-all"
-                          >
-                            {src}
-                          </code>
-                        ))
+                        <span className="text-xs text-gray-500">Hidden</span>
                       )}
                     </div>
                   </td>
@@ -182,20 +231,8 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: stream?.name ?? "",
-    src: stream?.sources[0] ?? "",
   });
-  const [creds, setCreds] = useState({ user: "", pass: "" });
-
-  // Inject user:pass into an rtsp:// (or ffmpeg:rtsp://) source that has no auth yet.
-  const buildSrc = (): string => {
-    let src = form.src.trim();
-    const { user, pass } = creds;
-    if (user && pass) {
-      const auth = `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@`;
-      src = src.replace(/^(ffmpeg:)?rtsp:\/\/(?!.*@)/i, (_m, ff) => `${ff ?? ""}rtsp://${auth}`);
-    }
-    return src;
-  };
+  const [streamFields, setStreamFields] = useState(() => parseStream(stream?.sources[0]));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -205,7 +242,7 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
       // PUT overwrites by name, so it handles both add and edit.
       await api.put<ApiResponse<unknown>>("/go2rtc/streams", {
         name: form.name,
-        src: buildSrc(),
+        src: buildStream(streamFields),
       });
       onSuccess();
     } catch (err) {
@@ -218,7 +255,9 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={(e: MouseEvent<HTMLDivElement>) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl"
@@ -257,53 +296,51 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5 flex items-center justify-between">
-              <span>Source URL *</span>
-              <span className="text-[10px] text-blue-400 font-normal uppercase tracking-wider">
-                RTSP / ffmpeg
-              </span>
-            </label>
-            <input
-              value={form.src}
-              onChange={(e) => setForm({ ...form, src: e.target.value })}
-              required
-              placeholder="rtsp://... hoặc ffmpeg:rtsp://...#video=h264"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
-            />
-            <p className="text-[11px] text-gray-500 mt-1">
-              H265 (Hikvision): dùng <code className="text-gray-400">ffmpeg:rtsp://...#video=h264</code> để transcode sang H264.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                Username
-              </label>
+            <div className="space-y-3 border border-gray-800 rounded-lg p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={streamFields.user}
+                  onChange={(e) => setStreamFields({ ...streamFields, user: e.target.value })}
+                  placeholder="user"
+                  autoComplete="off"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+                />
+                <input
+                  type="password"
+                  value={streamFields.pass}
+                  onChange={(e) => setStreamFields({ ...streamFields, pass: e.target.value })}
+                  placeholder="pass"
+                  autoComplete="new-password"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+                />
+              </div>
               <input
-                value={creds.user}
-                onChange={(e) => setCreds({ ...creds, user: e.target.value })}
-                placeholder="admin"
-                autoComplete="off"
+                value={streamFields.host}
+                onChange={(e) => setStreamFields({ ...streamFields, host: e.target.value })}
+                placeholder="host:554"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={streamFields.channels}
+                  onChange={(e) => setStreamFields({ ...streamFields, channels: e.target.value })}
+                  placeholder="channels/101"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+                />
+                <input
+                  value={streamFields.format}
+                  onChange={(e) => setStreamFields({ ...streamFields, format: e.target.value })}
+                  placeholder="#video=h264"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
+                />
+              </div>
+              <input
+                value={streamFields.rawUrl}
+                onChange={(e) => setStreamFields({ ...streamFields, rawUrl: e.target.value })}
+                placeholder="Raw URL nếu không nhập theo cấu trúc"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={creds.pass}
-                onChange={(e) => setCreds({ ...creds, pass: e.target.value })}
-                placeholder="••••••"
-                autoComplete="new-password"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
-              />
-            </div>
-            <p className="col-span-2 text-[11px] text-gray-500 -mt-1">
-              Nhập user/pass nếu URL RTSP chưa có. Sẽ được chèn dạng rtsp://user:pass@host.
-            </p>
           </div>
 
           {error && (

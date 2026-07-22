@@ -113,6 +113,7 @@ export default function LiveViewPage() {
   const [eventLog, setEventLog] = useState<Event[]>([]);
   const [showFeed, setShowFeed] = useState(true);
   const [uniform, setUniform] = useState(false);
+  const [currentBp, setCurrentBp] = useState<BP>("lg");
   const [captureOpen, setCaptureOpen] = useState(false);
 
   // Live <video> elements by camera id, for capture/record.
@@ -212,25 +213,27 @@ export default function LiveViewPage() {
     [persistLayout],
   );
 
-  // When uniform mode is on, force every tile to the default footprint.
-  const displayLayouts = useMemo<Layouts | null>(() => {
-    if (!layouts) return null;
-    if (!uniform) return layouts;
-    const out = {} as Layouts;
-    (Object.keys(COLS) as BP[]).forEach((bp) => {
-      const w = DEFAULT_W[bp];
-      const cols = COLS[bp];
-      const perRow = Math.max(1, Math.floor(cols / w));
-      out[bp] = (layouts[bp] ?? []).map((it, idx) => ({
-        ...it,
-        x: (idx % perRow) * w,
-        y: Math.floor(idx / perRow) * DEFAULT_H,
-        w,
-        h: DEFAULT_H,
-      }));
-    });
-    return out;
-  }, [layouts, uniform]);
+  // When uniform mode is on, resizing one tile applies its new size to every
+  // tile in the current breakpoint while leaving each tile's position intact.
+  const handleResizeStop = useCallback(
+    (current: Layout[], _old: Layout, updated: Layout) => {
+      if (!uniform) return;
+      setLayouts((prev) => {
+        const base = prev ?? savedLayoutRef.current;
+        if (!base) return prev;
+        const next = {} as Layouts;
+        (Object.keys(COLS) as BP[]).forEach((bp) => {
+          const items = bp === currentBp ? current : base[bp] ?? [];
+          next[bp] = items.map((it) => ({ ...it, w: updated.w, h: updated.h }));
+        });
+        savedLayoutRef.current = next;
+        liveCache.setLayouts(next);
+        persistLayout(next);
+        return next;
+      });
+    },
+    [uniform, currentBp, persistLayout],
+  );
 
   const resetLayout = useCallback(() => {
     const fresh = mergeLayouts(null, cameras);
@@ -426,10 +429,10 @@ export default function LiveViewPage() {
               </p>
             </div>
           ) : (
-            displayLayouts && (
+            layouts && (
               <ResponsiveGridLayout
                 className="layout"
-                layouts={displayLayouts}
+                layouts={layouts}
                 breakpoints={BREAKPOINTS}
                 cols={COLS}
                 rowHeight={70}
@@ -437,9 +440,11 @@ export default function LiveViewPage() {
                 containerPadding={[0, 0]}
                 draggableHandle=".cam-drag-handle"
                 onLayoutChange={handleLayoutChange}
+                onBreakpointChange={(bp) => setCurrentBp(bp as BP)}
+                onResizeStop={handleResizeStop}
                 compactType="vertical"
                 preventCollision={false}
-                isResizable={!uniform}
+                isResizable
                 isBounded
               >
                 {cameras.map((camera) => (
@@ -576,7 +581,12 @@ function CaptureDialog({ cameras, onClose, onRun }: CaptureDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
