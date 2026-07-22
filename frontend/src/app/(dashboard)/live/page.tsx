@@ -564,6 +564,14 @@ function CaptureDialog({ cameras, onClose, onRun }: CaptureDialogProps) {
   const [seconds, setSeconds] = useState(10);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -583,9 +591,6 @@ function CaptureDialog({ cameras, onClose, onRun }: CaptureDialogProps) {
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <div
         className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md shadow-2xl"

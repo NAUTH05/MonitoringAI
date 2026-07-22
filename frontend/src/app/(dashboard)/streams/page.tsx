@@ -3,7 +3,7 @@
 import { api } from "@/lib/api";
 import { ApiResponse } from "@/types";
 import { Loader2, Pencil, Plus, Radio, RefreshCw, Trash2, X } from "lucide-react";
-import { FormEvent, MouseEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 interface Go2rtcStream {
   name: string;
@@ -234,6 +234,14 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
   });
   const [streamFields, setStreamFields] = useState(() => parseStream(stream?.sources[0]));
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -255,9 +263,6 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={(e: MouseEvent<HTMLDivElement>) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
       <div
         className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl"

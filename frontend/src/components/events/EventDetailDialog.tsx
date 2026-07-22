@@ -9,6 +9,7 @@ import {
 } from "@/lib/utils";
 import { Event } from "@/types";
 import { Download, Image, Video, X } from "lucide-react";
+import { useEffect } from "react";
 
 export function EventDetailDialog({
   event,
@@ -17,10 +18,17 @@ export function EventDetailDialog({
   event: Event;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
     >
       <div
         className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl"

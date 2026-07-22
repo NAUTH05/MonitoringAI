@@ -3,64 +3,51 @@
 import { api } from "@/lib/api";
 import { ApiResponse, Camera, CameraStatus } from "@/types";
 import { Loader2, X } from "lucide-react";
-import { FormEvent, MouseEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+
+const DEFAULT_HOST = "100.100.1.100";
 
 interface StreamFields {
-  user: string;
-  pass: string;
   host: string;
-  channels: string;
-  format: string;
+  name: string;
   rawUrl: string;
 }
 
 const emptyStream = (): StreamFields => ({
-  user: "",
-  pass: "",
   host: "",
-  channels: "",
-  format: "",
+  name: "",
   rawUrl: "",
 });
 
+// Parse a go2rtc playback URL (http://<host>:1984/api/stream.m3u8?src=<name>)
+// or a bare stream name back into form fields. Mirrors deriveStreamName in CameraFeed.
 function parseStream(url?: string): StreamFields {
   const parsed = emptyStream();
   if (!url) return parsed;
 
   const value = url.trim();
-  const withoutPrefix = value.replace(/^ffmpeg:/i, "");
-  if (!withoutPrefix.toLowerCase().startsWith("rtsp://")) {
-    return { ...parsed, rawUrl: value };
+  const src = value.match(/[?&]src=([^&]+)/);
+  if (src) {
+    let host = "";
+    try {
+      host = new URL(value).hostname;
+    } catch {
+      /* ignore */
+    }
+    return { host, name: decodeURIComponent(src[1]), rawUrl: "" };
   }
-
-  try {
-    const u = new URL(withoutPrefix);
-    return {
-      user: decodeURIComponent(u.username),
-      pass: decodeURIComponent(u.password),
-      host: u.host,
-      channels: u.pathname.replace(/^\//, ""),
-      format: u.hash,
-      rawUrl: "",
-    };
-  } catch {
-    return { ...parsed, rawUrl: value };
-  }
+  if (/^[\w.-]+$/.test(value)) return { ...parsed, name: value };
+  return { ...parsed, rawUrl: value };
 }
 
 function buildStream(fields: StreamFields): string {
+  const name = fields.name.trim();
   const raw = fields.rawUrl.trim();
-  if (!fields.host.trim()) return raw;
-
-  const user = fields.user.trim();
-  const pass = fields.pass.trim();
-  const auth = user
-    ? `${encodeURIComponent(user)}${pass ? `:${encodeURIComponent(pass)}` : ""}@`
-    : "";
-  const channels = fields.channels.trim().replace(/^\/+/, "");
-  const format = fields.format.trim();
-  const suffix = format ? (format.startsWith("#") ? format : `#${format}`) : "";
-  return `rtsp://${auth}${fields.host.trim()}${channels ? `/${channels}` : ""}${suffix}`;
+  if (name) {
+    const host = fields.host.trim() || DEFAULT_HOST;
+    return `http://${host}:1984/api/stream.m3u8?src=${encodeURIComponent(name)}`;
+  }
+  return raw;
 }
 
 interface Props {
@@ -78,8 +65,19 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
     location: camera?.location ?? "",
     status: (camera?.status ?? "OFFLINE") as CameraStatus,
   });
-  const [mainStream, setMainStream] = useState(() => parseStream(camera?.rtspUrl));
+  const [mainStream, setMainStream] = useState(() => {
+    const parsed = parseStream(camera?.rtspUrl);
+    return camera ? parsed : { ...parsed, host: DEFAULT_HOST };
+  });
   const [subStream, setSubStream] = useState(() => parseStream(camera?.subRtspUrl));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -110,10 +108,6 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
     }
   };
 
-  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
   const streamFields = (
     label: string,
     value: StreamFields,
@@ -129,45 +123,23 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <input
-          value={value.user}
-          onChange={(e) => onChange({ ...value, user: e.target.value })}
-          placeholder="user"
+          value={value.host}
+          onChange={(e) => onChange({ ...value, host: e.target.value })}
+          placeholder="go2rtc host (100.100.1.100)"
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
         />
         <input
-          type="password"
-          value={value.pass}
-          onChange={(e) => onChange({ ...value, pass: e.target.value })}
-          placeholder="pass"
-          autoComplete="new-password"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
-        />
-      </div>
-      <input
-        value={value.host}
-        onChange={(e) => onChange({ ...value, host: e.target.value })}
-        required={required && !value.rawUrl}
-        placeholder="host:554"
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
-      />
-      <div className="grid grid-cols-2 gap-3">
-        <input
-          value={value.channels}
-          onChange={(e) => onChange({ ...value, channels: e.target.value })}
-          placeholder="channels/101"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
-        />
-        <input
-          value={value.format}
-          onChange={(e) => onChange({ ...value, format: e.target.value })}
-          placeholder="#video=h264"
+          value={value.name}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+          required={required && !value.rawUrl}
+          placeholder="stream name (C17_D1)"
           className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
         />
       </div>
       <input
         value={value.rawUrl}
         onChange={(e) => onChange({ ...value, rawUrl: e.target.value })}
-        placeholder="Raw URL nếu không phải RTSP chuẩn"
+        placeholder="Raw URL tùy chọn (http://.../stream.m3u8?src=...)"
         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
       />
     </div>
@@ -176,7 +148,6 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
     >
       <div
         className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl"

@@ -3,7 +3,7 @@
 import { api } from "@/lib/api";
 import { ApiResponse, Role, User } from "@/types";
 import { Loader2, X } from "lucide-react";
-import { FormEvent, MouseEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 interface Props {
   user?: User;
@@ -61,14 +61,17 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
     }
   };
 
-  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
-  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={handleBackdropClick}
     >
       <div
         className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl"
