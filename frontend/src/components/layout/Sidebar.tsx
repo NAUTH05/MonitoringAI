@@ -21,7 +21,6 @@ const navItems = [
   { href: "/live", labelKey: "nav.liveView", icon: Monitor },
   { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
   { href: "/cameras", labelKey: "nav.cameras", icon: Camera },
-  { href: "/streams", labelKey: "nav.streams", icon: Radio },
   { href: "/modules", labelKey: "nav.modules", icon: Cpu },
   { href: "/events", labelKey: "nav.events", icon: AlertTriangle },
   { href: "/users", labelKey: "nav.users", icon: Users },
