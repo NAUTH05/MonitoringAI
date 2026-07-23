@@ -133,6 +133,7 @@ export function Go2RtcPlayer({
       });
 
       ws.addEventListener("message", (ev) => {
+        lastDataTime = Date.now();
         if (typeof ev.data === "string") {
           const msg = JSON.parse(ev.data);
           if (msg.type === "mse") {
@@ -216,6 +217,66 @@ export function Go2RtcPlayer({
     el.addEventListener("loadeddata", tryPlay);
     el.addEventListener("canplay", tryPlay);
 
+    // Watchdog state & healthcheck
+    let lastDataTime = Date.now();
+    let lastCurrentTime = -1;
+    let stuckCount = 0;
+
+    const watchdog = setInterval(() => {
+      if (stopped || !active || !el) return;
+
+      const now = Date.now();
+      const currTime = el.currentTime;
+
+      // 1. Silent WebSocket check (no data received for > 12s)
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        if (now - lastDataTime > 12000) {
+          fallbackOrRetry();
+          return;
+        }
+      }
+
+      // 2. Playback progress & lag catch-up
+      if (el.buffered.length > 0) {
+        const bufferedEnd = el.buffered.end(el.buffered.length - 1);
+        const drift = bufferedEnd - currTime;
+
+        // Catch up latency drift if background tab fell behind (> 2.5s)
+        if (drift > 2.5 && drift < 30.0) {
+          el.currentTime = bufferedEnd - 0.2;
+        }
+
+        // Check if video is frozen (currentTime hasn't moved)
+        if (currTime === lastCurrentTime && stateRef.current === "playing") {
+          stuckCount++;
+          if (el.paused) {
+            el.play().catch(() => undefined);
+          }
+          if (stuckCount >= 4) {
+            stuckCount = 0;
+            fallbackOrRetry();
+            return;
+          }
+        } else {
+          stuckCount = 0;
+          lastCurrentTime = currTime;
+        }
+      }
+    }, 3000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && el && active && !stopped) {
+        if (el.paused) el.play().catch(() => undefined);
+        if (el.buffered.length > 0) {
+          const bufferedEnd = el.buffered.end(el.buffered.length - 1);
+          if (bufferedEnd - el.currentTime > 2.0) {
+            el.currentTime = bufferedEnd - 0.2;
+          }
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     // Kick off with MSE.
     setState("connecting");
     if (typeof MediaSource !== "undefined") {
@@ -225,6 +286,8 @@ export function Go2RtcPlayer({
     }
 
     function cleanupConnections() {
+      clearInterval(watchdog);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (reconnectRef.current) {
         clearTimeout(reconnectRef.current);
         reconnectRef.current = null;

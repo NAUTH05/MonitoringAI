@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Event } from "@/types";
-import { Volume2, VolumeX, ShieldAlert, Cpu, Repeat, WifiOff, Maximize2 } from "lucide-react";
+import { Volume2, VolumeX, ShieldAlert, Cpu, Repeat, WifiOff, Maximize2, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Go2RtcPlayer, PlayerState } from "./Go2RtcPlayer";
@@ -39,6 +39,7 @@ export function CameraFeed({
   const [useSub, setUseSub] = useState(false);
   const [fitMode, setFitMode] = useState<"contain" | "cover">("contain");
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -118,6 +119,7 @@ export function CameraFeed({
         ) : streamName ? (
           <>
             <Go2RtcPlayer
+              key={`${streamName}-${reloadKey}`}
               streamName={streamName}
               active
               muted={!audioEnabled}
@@ -165,6 +167,13 @@ export function CameraFeed({
               ) : (
                 <VolumeX className="w-3.5 h-3.5" />
               )}
+            </button>
+            <button
+              onClick={() => setReloadKey((k) => k + 1)}
+              title="Tải lại luồng camera này"
+              className="p-1.5 rounded-lg bg-gray-900/80 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setFitMode((v) => (v === "contain" ? "cover" : "contain"))}

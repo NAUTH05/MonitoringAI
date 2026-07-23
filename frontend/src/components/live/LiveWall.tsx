@@ -22,6 +22,7 @@ import {
   PanelRightOpen,
   RefreshCw,
   RotateCcw,
+  SlidersHorizontal,
   Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -133,6 +134,7 @@ export function LiveWall() {
   const [eventLog, setEventLog] = useState<Event[]>([]);
   const [showFeed, setShowFeed] = useState(true);
   const [uniform, setUniform] = useState(false);
+  const [gridGap, setGridGap] = useState<number>(4);
   const [currentBp, setCurrentBp] = useState<BP>("lg");
   const [captureOpen, setCaptureOpen] = useState(false);
 
@@ -155,6 +157,13 @@ export function LiveWall() {
   useEffect(() => {
     setShowFeed(localStorage.getItem("liveShowFeed") !== "0");
     setUniform(localStorage.getItem("liveUniform") === "1");
+    const savedGap = localStorage.getItem("liveGridGap");
+    if (savedGap) setGridGap(Number(savedGap));
+  }, []);
+
+  const changeGridGap = useCallback((gap: number) => {
+    setGridGap(gap);
+    localStorage.setItem("liveGridGap", String(gap));
   }, []);
 
   const toggleFeed = useCallback(() => {
@@ -432,6 +441,17 @@ export function LiveWall() {
               <Grid2x2 className="w-3.5 h-3.5" />
             </button>
             <button
+              onClick={() => {
+                const nextGap = gridGap === 2 ? 4 : gridGap === 4 ? 8 : gridGap === 8 ? 12 : 2;
+                changeGridGap(nextGap);
+              }}
+              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition flex items-center gap-1"
+              title={`Khoảng cách các khung camera: ${gridGap}px (Click để chuyển: 2px → 4px → 8px → 12px)`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-mono leading-none">{gridGap}px</span>
+            </button>
+            <button
               onClick={resetLayout}
               className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
               title={t("live.resetLayout")}
@@ -477,7 +497,7 @@ export function LiveWall() {
                 breakpoints={BREAKPOINTS}
                 cols={COLS}
                 rowHeight={70}
-                margin={[12, 12]}
+                margin={[gridGap, gridGap]}
                 containerPadding={[0, 0]}
                 draggableHandle=".cam-drag-handle"
                 onLayoutChange={handleLayoutChange}
