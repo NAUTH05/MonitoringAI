@@ -15,13 +15,16 @@ import { Camera, CameraStatus, Event } from "@/types";
 import {
   AlertTriangle,
   Camera as CameraIcon,
+  Check,
   GripVertical,
   Grid2x2,
+  LayoutGrid,
   Monitor,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   RotateCcw,
+  Save,
   SlidersHorizontal,
   Video,
 } from "lucide-react";
@@ -128,7 +131,18 @@ export function LiveWall() {
 
   const [layouts, setLayouts] = useState<Layouts | null>(() => liveCache.getLayouts());
   const savedLayoutRef = useRef<Layouts | null>(liveCache.getLayouts());
+  const userSavedLayoutRef = useRef<Layouts | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountingRef = useRef(true);
+
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showNotification = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMsg(msg);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 2800);
+  }, []);
 
   const [activeEvents, setActiveEvents] = useState<Record<string, Event>>({});
   const [eventLog, setEventLog] = useState<Event[]>([]);
@@ -153,12 +167,19 @@ export function LiveWall() {
     }, 800);
   }, []);
 
-  // Restore preferences.
+  // Restore preferences & mounting guard to prevent layout corruption during tab switch.
   useEffect(() => {
+    isMountingRef.current = true;
+    const timer = setTimeout(() => {
+      isMountingRef.current = false;
+    }, 1000);
+
     setShowFeed(localStorage.getItem("liveShowFeed") !== "0");
     setUniform(localStorage.getItem("liveUniform") === "1");
     const savedGap = localStorage.getItem("liveGridGap");
     if (savedGap) setGridGap(Number(savedGap));
+
+    return () => clearTimeout(timer);
   }, []);
 
   const changeGridGap = useCallback((gap: number) => {
@@ -228,7 +249,10 @@ export function LiveWall() {
         const res = await api.get<{ success: boolean; data: Layouts | null }>(
           "/layout",
         );
-        if (res.success && res.data) savedLayoutRef.current = res.data;
+        if (res.success && res.data) {
+          savedLayoutRef.current = res.data;
+          userSavedLayoutRef.current = res.data;
+        }
       } catch {
         // No saved layout yet; fall back to auto layout.
       } finally {
@@ -249,8 +273,15 @@ export function LiveWall() {
 
   const handleLayoutChange = useCallback(
     (_current: Layout[], all: Layouts) => {
-      // In uniform mode, keep every tile the same size so a drag/resize on one
-      // tile never leaves the others out of sync.
+      // 🚨 Guard against initial mount unmeasured container width distortion (Bug #3 fix)
+      if (isMountingRef.current) return;
+
+      // Check if items were distorted into single narrow column during width transition
+      if ((currentBp === "lg" || currentBp === "md") && _current.length > 1) {
+        const isDistorted = _current.every((it) => it.w <= 2);
+        if (isDistorted) return;
+      }
+
       const next = uniform ? normalizeUniform(all, currentBp) ?? all : all;
       setLayouts(next);
       savedLayoutRef.current = next;
@@ -282,12 +313,52 @@ export function LiveWall() {
     [uniform, currentBp, persistLayout],
   );
 
-  const resetLayout = useCallback(() => {
+  // Requirement 1: Auto arrange clean box grid
+  const autoArrange = useCallback(() => {
+    if (cameras.length === 0) return;
     const fresh = mergeLayouts(null, cameras);
-    setLayouts(fresh);
-    savedLayoutRef.current = fresh;
-    persistLayout(fresh);
-  }, [cameras, persistLayout]);
+    const finalLayout = uniform ? normalizeUniform(fresh, currentBp) ?? fresh : fresh;
+    setLayouts(finalLayout);
+    savedLayoutRef.current = finalLayout;
+    liveCache.setLayouts(finalLayout);
+    persistLayout(finalLayout);
+    showNotification("✦ Đã tự động sắp xếp gọn các ô camera!");
+  }, [cameras, currentBp, persistLayout, showNotification, uniform]);
+
+  // Requirement 2: Save custom layout & Restore saved layout
+  const saveCustomLayout = useCallback(() => {
+    if (!layouts) return;
+    userSavedLayoutRef.current = layouts;
+    try {
+      localStorage.setItem("user_saved_layout", JSON.stringify(layouts));
+    } catch {
+      /* ignore */
+    }
+    persistLayout(layouts);
+    showNotification("✓ Đã lưu bố cục hiện tại!");
+  }, [layouts, persistLayout, showNotification]);
+
+  const restoreSavedLayout = useCallback(() => {
+    let saved = userSavedLayoutRef.current;
+    if (!saved) {
+      try {
+        const str = localStorage.getItem("user_saved_layout");
+        if (str) saved = JSON.parse(str);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (saved) {
+      setLayouts(saved);
+      savedLayoutRef.current = saved;
+      liveCache.setLayouts(saved);
+      persistLayout(saved);
+      showNotification("↺ Đã khôi phục về bố cục đã lưu!");
+    } else {
+      autoArrange();
+    }
+  }, [autoArrange, persistLayout, showNotification]);
 
   const handleNewEvent = useCallback((event: Event) => {
     setEventLog((prev) => [event, ...prev.slice(0, 49)]);
@@ -422,24 +493,35 @@ export function LiveWall() {
                 {t("live.clearAlerts", { count: activeAlertCount })}
               </button>
             )}
+
+            {/* Requirement 1: Auto arrange clean layout */}
             <button
-              onClick={() => setCaptureOpen(true)}
-              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
-              title={t("live.recordCapture")}
+              onClick={autoArrange}
+              className="px-2.5 py-1.5 border border-blue-900/60 bg-blue-950/30 text-blue-300 hover:bg-blue-900/50 rounded-md transition text-xs flex items-center gap-1.5 font-medium"
+              title="Tự động sắp xếp vị trí các camera gọn gàng & cân đối"
             >
-              <Video className="w-3.5 h-3.5" />
+              <LayoutGrid className="w-3.5 h-3.5 text-blue-400" />
+              <span>Sắp xếp gọn</span>
             </button>
+
+            {/* Requirement 2: Save layout & Restore saved layout */}
             <button
-              onClick={toggleUniform}
-              className={`p-1.5 border rounded-md transition ${
-                uniform
-                  ? "border-blue-700 text-blue-400 bg-blue-950/40"
-                  : "border-neutral-800 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
-              }`}
-              title={uniform ? t("live.uniformOn") : t("live.uniformOff")}
+              onClick={saveCustomLayout}
+              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-emerald-400 hover:bg-neutral-900 transition flex items-center gap-1"
+              title="Lưu bố cục hiện tại"
             >
-              <Grid2x2 className="w-3.5 h-3.5" />
+              <Save className="w-3.5 h-3.5" />
             </button>
+
+            <button
+              onClick={restoreSavedLayout}
+              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition flex items-center gap-1"
+              title="Khôi phục về bố cục đã lưu gần nhất"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Gap size adjustment */}
             <button
               onClick={() => {
                 const nextGap = gridGap === 2 ? 4 : gridGap === 4 ? 8 : gridGap === 8 ? 12 : 2;
@@ -451,13 +533,30 @@ export function LiveWall() {
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="text-[10px] font-mono leading-none">{gridGap}px</span>
             </button>
+
+            {/* Uniform size toggle */}
             <button
-              onClick={resetLayout}
-              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
-              title={t("live.resetLayout")}
+              onClick={toggleUniform}
+              className={`p-1.5 border rounded-md transition ${
+                uniform
+                  ? "border-blue-700 text-blue-400 bg-blue-950/40"
+                  : "border-neutral-800 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+              }`}
+              title={uniform ? t("live.uniformOn") : t("live.uniformOff")}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <Grid2x2 className="w-3.5 h-3.5" />
             </button>
+
+            {/* Capture/Record */}
+            <button
+              onClick={() => setCaptureOpen(true)}
+              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
+              title={t("live.recordCapture")}
+            >
+              <Video className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Toggle right feed */}
             <button
               onClick={toggleFeed}
               className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
@@ -469,6 +568,8 @@ export function LiveWall() {
                 <PanelRightOpen className="w-3.5 h-3.5" />
               )}
             </button>
+
+            {/* Refresh feeds */}
             <button
               onClick={fetchCameras}
               className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition"
@@ -601,6 +702,14 @@ export function LiveWall() {
           onClose={() => setCaptureOpen(false)}
           onRun={runCapture}
         />
+      )}
+
+      {/* Floating notification toast */}
+      {toastMsg && (
+        <div className="fixed top-16 right-6 z-50 px-4 py-2.5 bg-neutral-900/95 border border-neutral-700 text-neutral-100 text-xs rounded-lg shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="font-medium">{toastMsg}</span>
+        </div>
       )}
     </div>
   );
