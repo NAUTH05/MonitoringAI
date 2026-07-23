@@ -18,7 +18,6 @@ import {
   Check,
   GripVertical,
   Grid2x2,
-  LayoutGrid,
   Monitor,
   PanelRightClose,
   PanelRightOpen,
@@ -344,33 +343,21 @@ export function LiveWall() {
     [uniform, currentBp],
   );
 
-  // Requirement 1: Auto arrange clean box grid for all cameras
-  const autoArrange = useCallback(() => {
-    if (cameras.length === 0) return;
-    const fresh = {} as Layouts;
-    (Object.keys(COLS) as BP[]).forEach((bp) => {
-      fresh[bp] = buildDefault(bp, cameras);
-    });
-    const finalLayout = uniform ? normalizeUniform(fresh, currentBp, lastResizedSizeRef.current) ?? fresh : fresh;
-    setLayouts(finalLayout);
-    savedLayoutRef.current = finalLayout;
-    liveCache.setLayouts(finalLayout);
-    showNotification("✦ Đã tự động sắp xếp gọn các ô camera! (Bấm nút 'Lưu' nếu muốn lưu)");
-  }, [cameras, currentBp, showNotification, uniform]);
-
-  // Requirement 2: EXPLICIT Save custom layout ONLY when user clicks Save button!
+  // EXPLICIT Save custom layout ONLY when user clicks Save button!
   const saveCustomLayout = useCallback(() => {
     if (!layouts) return;
-    userSavedLayoutRef.current = layouts;
+    const snapshot = JSON.parse(JSON.stringify(layouts));
+    userSavedLayoutRef.current = snapshot;
     try {
-      localStorage.setItem("user_saved_layout", JSON.stringify(layouts));
+      localStorage.setItem("user_saved_layout", JSON.stringify(snapshot));
     } catch {
       /* ignore */
     }
-    persistLayout(layouts);
-    showNotification("✓ Đã lưu bố cục thành công!");
+    persistLayout(snapshot);
+    showNotification("✓ Đã lưu vị trí & kích thước bố cục thành công!");
   }, [layouts, persistLayout, showNotification]);
 
+  // Restore BOTH exact positions AND sizes from the saved snapshot
   const restoreSavedLayout = useCallback(() => {
     let saved = userSavedLayoutRef.current;
     if (!saved) {
@@ -383,14 +370,24 @@ export function LiveWall() {
     }
 
     if (saved) {
-      setLayouts(saved);
-      savedLayoutRef.current = saved;
-      liveCache.setLayouts(saved);
-      showNotification("↺ Đã khôi phục về bố cục đã lưu!");
-    } else {
-      autoArrange();
+      const snapshot = JSON.parse(JSON.stringify(saved));
+      lastResizedSizeRef.current = null; // Clear transient resize override!
+      setLayouts(snapshot);
+      savedLayoutRef.current = snapshot;
+      liveCache.setLayouts(snapshot);
+      showNotification("↺ Đã khôi phục đầy đủ vị trí & kích thước đã lưu!");
+    } else if (cameras.length > 0) {
+      const fresh = {} as Layouts;
+      (Object.keys(COLS) as BP[]).forEach((bp) => {
+        fresh[bp] = buildDefault(bp, cameras);
+      });
+      lastResizedSizeRef.current = null;
+      setLayouts(fresh);
+      savedLayoutRef.current = fresh;
+      liveCache.setLayouts(fresh);
+      showNotification("↺ Đã đặt lại bố cục mặc định!");
     }
-  }, [autoArrange, showNotification]);
+  }, [cameras, showNotification]);
 
   const handleNewEvent = useCallback((event: Event) => {
     setEventLog((prev) => [event, ...prev.slice(0, 49)]);
@@ -526,21 +523,11 @@ export function LiveWall() {
               </button>
             )}
 
-            {/* Requirement 1: Auto arrange clean layout */}
-            <button
-              onClick={autoArrange}
-              className="px-2.5 py-1.5 border border-blue-900/60 bg-blue-950/30 text-blue-300 hover:bg-blue-900/50 rounded-md transition text-xs flex items-center gap-1.5 font-medium"
-              title="Tự động sắp xếp vị trí các camera gọn gàng & cân đối"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-blue-400" />
-              <span>Sắp xếp gọn</span>
-            </button>
-
-            {/* Requirement 2: Save layout & Restore saved layout */}
+            {/* Save layout & Restore saved layout */}
             <button
               onClick={saveCustomLayout}
               className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-emerald-400 hover:bg-neutral-900 transition flex items-center gap-1"
-              title="Lưu bố cục hiện tại"
+              title="Lưu vị trí & kích thước bố cục hiện tại"
             >
               <Save className="w-3.5 h-3.5" />
             </button>
