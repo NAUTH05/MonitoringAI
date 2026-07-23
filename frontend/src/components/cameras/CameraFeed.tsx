@@ -1,17 +1,17 @@
 "use client";
 
+import { ActiveRecorder, captureFrameLocal, startRecordLocalManual } from "@/lib/capture";
 import { Camera, Event } from "@/types";
-import { captureFrameLocal, startRecordLocalManual, ActiveRecorder } from "@/lib/capture";
 import {
+  Camera as CameraIcon,
+  RotateCw,
+  Shield,
+  ShieldAlert,
+  Video as VideoIcon,
   Volume2,
   VolumeX,
-  ShieldAlert,
   WifiOff,
-  RotateCw,
   X,
-  Shield,
-  Camera as CameraIcon,
-  Video as VideoIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -249,7 +249,7 @@ export function CameraFeed({
             onClick={() => setIsPopupOpen(false)}
           >
             <div
-              className="relative w-full max-w-5xl h-[110vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              className="relative w-full max-w-5xl h-[85vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header Bar */}

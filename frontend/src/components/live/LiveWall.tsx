@@ -38,7 +38,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 // Breakpoint column counts and the default footprint a fresh camera takes.
 const COLS = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 } as const;
 const DEFAULT_W = { lg: 4, md: 5, sm: 3, xs: 4, xxs: 2 } as const;
-const DEFAULT_H = { lg: 3, md: 4, sm: 3, xs: 4, xxs: 3 } as const;
+const DEFAULT_H = { lg: 5, md: 5, sm: 4, xs: 4, xxs: 4 } as const;
 const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 } as const;
 type BP = keyof typeof COLS;
 
@@ -52,24 +52,24 @@ function buildDefault(bp: BP, cameras: Camera[]): Layout[] {
 
   if (bp === "lg") {
     if (N <= 4) {
-      perRow = 2; w = 6; h = 4;
+      perRow = 2; w = 6; h = 6;
     } else if (N <= 9) {
-      perRow = 3; w = 4; h = 3;
+      perRow = 3; w = 4; h = 5;
     } else {
-      perRow = 4; w = 3; h = 3;
+      perRow = 4; w = 3; h = 4;
     }
   } else if (bp === "md") {
     if (N <= 4) {
-      perRow = 2; w = 5; h = 4;
+      perRow = 2; w = 5; h = 5;
     } else {
-      perRow = 2; w = 5; h = 3;
+      perRow = 2; w = 5; h = 4;
     }
   } else if (bp === "sm") {
-    perRow = 2; w = 3; h = 3;
+    perRow = 2; w = 3; h = 4;
   } else if (bp === "xs") {
-    perRow = 1; w = 4; h = 3;
+    perRow = 1; w = 4; h = 4;
   } else {
-    perRow = 1; w = 2; h = 3;
+    perRow = 1; w = 2; h = 4;
   }
 
   return cameras.map((cam, idx) => ({
@@ -79,7 +79,7 @@ function buildDefault(bp: BP, cameras: Camera[]): Layout[] {
     w,
     h,
     minW: 3,
-    minH: 3,
+    minH: 4,
     maxW: 12,
     maxH: 12,
   }));
@@ -223,20 +223,21 @@ export function LiveWall() {
               let minH = 3;
 
               if (ratio >= 1.5) {
-                // 16:9 widescreen (e.g. 1920x1080, 1280x720)
-                targetH = Math.max(3, Math.round(item.w * 0.75));
+                // 16:9 widescreen HD (e.g. 1920x1080, 1280x720)
+                // Account for top header bar (35px) + video aspect ratio
+                targetH = Math.max(4, Math.round(item.w * 1.15));
                 minW = 3;
-                minH = 5;
+                minH = 4;
               } else if (ratio >= 1.1) {
                 // 4:3 standard (e.g. 1280x960, 640x480)
-                targetH = Math.max(3, Math.round(item.w * 0.9));
+                targetH = Math.max(4, Math.round(item.w * 1.35));
                 minW = 3;
                 minH = 5;
               } else {
                 // Vertical / Corridor 9:16 (e.g. 1080x1920)
-                targetH = Math.max(4, Math.round(item.w * 1.6));
+                targetH = Math.max(6, Math.round(item.w * 2.2));
                 minW = 2;
-                minH = 5;
+                minH = 6;
               }
 
               return {
