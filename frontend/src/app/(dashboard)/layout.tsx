@@ -37,6 +37,15 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const onLive = pathname === "/live";
 
+  useEffect(() => {
+    if (onLive) {
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [onLive]);
+
   return (
     <AlertProvider>
       <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
@@ -46,7 +55,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <main className="flex-1 overflow-auto p-6">
             {/* LiveWall stays mounted across nav changes so camera streams
                 never tear down / reconnect. Only visibility toggles. */}
-            <div style={onLive ? undefined : { display: "none" }}>
+            <div className={onLive ? "h-full" : "hidden h-full"}>
               <LiveWall />
             </div>
             {!onLive && children}

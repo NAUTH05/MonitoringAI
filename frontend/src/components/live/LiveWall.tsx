@@ -162,6 +162,7 @@ export function LiveWall() {
   const lastResizedSizeRef = useRef<{ w: number; h: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountingRef = useRef(true);
+  const isInteractingRef = useRef(false);
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -300,16 +301,25 @@ export function LiveWall() {
     });
   }, [cameras, loading, uniform, currentBp]);
 
+  const handleDragStart = useCallback(() => {
+    isInteractingRef.current = true;
+  }, []);
+
+  const handleDragStop = useCallback(() => {
+    setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 100);
+  }, []);
+
+  const handleResizeStart = useCallback(() => {
+    isInteractingRef.current = true;
+  }, []);
+
   const handleLayoutChange = useCallback(
     (_current: Layout[], all: Layouts) => {
-      // 🚨 Guard against initial mount unmeasured container width distortion (Bug #3 fix)
-      if (isMountingRef.current) return;
-
-      // Check if items were distorted into single narrow column during width transition
-      if ((currentBp === "lg" || currentBp === "md") && _current.length > 1) {
-        const isDistorted = _current.every((it) => it.w <= 2);
-        if (isDistorted) return;
-      }
+      // 🚨 Guard against tab switching / un-hiding / container resize events!
+      // ONLY update layouts state if the user is actively dragging or resizing tiles.
+      if (!isInteractingRef.current) return;
 
       const next = uniform ? normalizeUniform(all, currentBp, lastResizedSizeRef.current) ?? all : all;
       setLayouts(next);
@@ -323,22 +333,27 @@ export function LiveWall() {
   // tile in the current breakpoint while leaving each tile's position intact.
   const handleResizeStop = useCallback(
     (current: Layout[], _old: Layout, updated: Layout) => {
-      if (!uniform) return;
-      // Record whichever camera tile was resized (Camera 1, 2, 3, 4...) as the benchmark size
-      lastResizedSizeRef.current = { w: updated.w, h: updated.h };
+      isInteractingRef.current = true;
+      if (uniform) {
+        // Record whichever camera tile was resized (Camera 1, 2, 3, 4...) as the benchmark size
+        lastResizedSizeRef.current = { w: updated.w, h: updated.h };
 
-      setLayouts((prev) => {
-        const base = prev ?? savedLayoutRef.current;
-        if (!base) return prev;
-        const next = {} as Layouts;
-        (Object.keys(COLS) as BP[]).forEach((bp) => {
-          const items = bp === currentBp ? current : base[bp] ?? [];
-          next[bp] = items.map((it) => ({ ...it, w: updated.w, h: updated.h }));
+        setLayouts((prev) => {
+          const base = prev ?? savedLayoutRef.current;
+          if (!base) return prev;
+          const next = {} as Layouts;
+          (Object.keys(COLS) as BP[]).forEach((bp) => {
+            const items = bp === currentBp ? current : base[bp] ?? [];
+            next[bp] = items.map((it) => ({ ...it, w: updated.w, h: updated.h }));
+          });
+          savedLayoutRef.current = next;
+          liveCache.setLayouts(next);
+          return next;
         });
-        savedLayoutRef.current = next;
-        liveCache.setLayouts(next);
-        return next;
-      });
+      }
+      setTimeout(() => {
+        isInteractingRef.current = false;
+      }, 100);
     },
     [uniform, currentBp],
   );
@@ -620,9 +635,12 @@ export function LiveWall() {
                 margin={[gridGap, gridGap]}
                 containerPadding={[0, 0]}
                 draggableHandle=".cam-drag-handle"
+                onDragStart={handleDragStart}
+                onDragStop={handleDragStop}
+                onResizeStart={handleResizeStart}
+                onResizeStop={handleResizeStop}
                 onLayoutChange={handleLayoutChange}
                 onBreakpointChange={(bp) => setCurrentBp(bp as BP)}
-                onResizeStop={handleResizeStop}
                 compactType="vertical"
                 preventCollision={false}
                 isResizable
