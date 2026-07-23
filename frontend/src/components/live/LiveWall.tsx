@@ -97,13 +97,17 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
 }
 
 // Force every tile in every breakpoint to a common w/h. The common size is
-// taken from the first tile of the current breakpoint, falling back to the
-// breakpoint default. Positions are left untouched.
-function normalizeUniform(base: Layouts | null, currentBp: BP): Layouts | null {
+// taken from overrideSize (if provided), or the first tile of the current breakpoint,
+// falling back to the breakpoint default. Positions are left untouched.
+function normalizeUniform(
+  base: Layouts | null,
+  currentBp: BP,
+  overrideSize?: { w: number; h: number } | null,
+): Layouts | null {
   if (!base) return base;
   const cur = base[currentBp] ?? [];
-  const w = cur[0]?.w ?? DEFAULT_W[currentBp];
-  const h = cur[0]?.h ?? DEFAULT_H[currentBp];
+  const w = overrideSize?.w ?? cur[0]?.w ?? DEFAULT_W[currentBp];
+  const h = overrideSize?.h ?? cur[0]?.h ?? DEFAULT_H[currentBp];
   const next = {} as Layouts;
   (Object.keys(COLS) as BP[]).forEach((bp) => {
     next[bp] = (base[bp] ?? []).map((it) => ({ ...it, w, h }));
@@ -132,6 +136,7 @@ export function LiveWall() {
   const [layouts, setLayouts] = useState<Layouts | null>(() => liveCache.getLayouts());
   const savedLayoutRef = useRef<Layouts | null>(liveCache.getLayouts());
   const userSavedLayoutRef = useRef<Layouts | null>(null);
+  const lastResizedSizeRef = useRef<{ w: number; h: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountingRef = useRef(true);
 
@@ -202,7 +207,7 @@ export function LiveWall() {
       localStorage.setItem("liveUniform", next ? "1" : "0");
       if (next) {
         setLayouts((cur) => {
-          const norm = normalizeUniform(cur ?? savedLayoutRef.current, currentBp);
+          const norm = normalizeUniform(cur ?? savedLayoutRef.current, currentBp, lastResizedSizeRef.current);
           if (norm) {
             savedLayoutRef.current = norm;
             liveCache.setLayouts(norm);
@@ -210,6 +215,8 @@ export function LiveWall() {
           }
           return norm ?? cur;
         });
+      } else {
+        lastResizedSizeRef.current = null;
       }
       return next;
     });
@@ -267,7 +274,7 @@ export function LiveWall() {
     if (loading || cameras.length === 0) return;
     setLayouts((prev) => {
       const merged = mergeLayouts(prev ?? savedLayoutRef.current, cameras);
-      return uniform ? normalizeUniform(merged, currentBp) ?? merged : merged;
+      return uniform ? normalizeUniform(merged, currentBp, lastResizedSizeRef.current) ?? merged : merged;
     });
   }, [cameras, loading, uniform, currentBp]);
 
@@ -282,7 +289,7 @@ export function LiveWall() {
         if (isDistorted) return;
       }
 
-      const next = uniform ? normalizeUniform(all, currentBp) ?? all : all;
+      const next = uniform ? normalizeUniform(all, currentBp, lastResizedSizeRef.current) ?? all : all;
       setLayouts(next);
       savedLayoutRef.current = next;
       liveCache.setLayouts(next);
@@ -291,11 +298,14 @@ export function LiveWall() {
     [persistLayout, uniform, currentBp],
   );
 
-  // When uniform mode is on, resizing one tile applies its new size to every
+  // When uniform mode is on, resizing ANY tile applies its new size (w, h) to EVERY
   // tile in the current breakpoint while leaving each tile's position intact.
   const handleResizeStop = useCallback(
     (current: Layout[], _old: Layout, updated: Layout) => {
       if (!uniform) return;
+      // Record whichever camera tile was resized (Camera 1, 2, 3, 4...) as the benchmark size
+      lastResizedSizeRef.current = { w: updated.w, h: updated.h };
+
       setLayouts((prev) => {
         const base = prev ?? savedLayoutRef.current;
         if (!base) return prev;
