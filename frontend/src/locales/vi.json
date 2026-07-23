@@ -186,7 +186,8 @@
     "editStream": "Sửa luồng",
     "nameLabel": "Tên luồng *",
     "nameFixed": "Tên cố định. Để đổi tên, hãy xóa và tạo luồng mới.",
-    "rawUrlPlaceholder": "Raw URL nếu không nhập theo cấu trúc"
+    "useFfmpegLabel": "Bật FFmpeg Transcode (Tự động thêm tiền tố ffmpeg:)",
+    "rawUrlPlaceholder": "Raw URL hoặc tùy chỉnh nguồn nâng cao (ví dụ: ffmpeg:... hoặc exec:...)"
   },
   "cameraFeed": {
     "reconnecting": "Đang kết nối lại...",

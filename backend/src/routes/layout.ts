@@ -17,63 +17,33 @@ const layoutItemSchema = z.object({
 const saveLayoutSchema = z.object({
   // Map of breakpoint -> layout items (e.g. { lg: [...], md: [...] }).
   layout: z.record(z.array(layoutItemSchema)),
-  uniform: z.boolean().optional(),
 });
 
-const GLOBAL_LAYOUT_USER_ID = 'GLOBAL_SYSTEM_LAYOUT';
-
-// GET /api/layout - shared camera-wall layout across all users and devices
+// GET /api/layout - current user's saved camera-wall layout
 router.get('/', authenticate, async (req: Request, res: Response) => {
   try {
-    const record = await prisma.dashboardLayout.findFirst({
-      where: { userId: GLOBAL_LAYOUT_USER_ID },
+    const record = await prisma.dashboardLayout.findUnique({
+      where: { userId: req.user!.id },
     });
-    if (!record) {
-      res.json({ success: true, data: null });
-      return;
-    }
-    const raw = record.layout as any;
-    if (raw && typeof raw === 'object' && 'layouts' in raw) {
-      res.json({
-        success: true,
-        data: {
-          layout: raw.layouts,
-          uniform: typeof raw.uniform === 'boolean' ? raw.uniform : false,
-        },
-      });
-    } else {
-      res.json({
-        success: true,
-        data: {
-          layout: raw,
-          uniform: false,
-        },
-      });
-    }
+    res.json({ success: true, data: record?.layout ?? null });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch layout' });
   }
 });
 
-// PUT /api/layout - upsert shared camera-wall layout and broadcast update
+// PUT /api/layout - upsert current user's layout
 router.put('/', authenticate, async (req: Request, res: Response) => {
   try {
-    const { layout, uniform = false } = saveLayoutSchema.parse(req.body);
-
-    const payload = { layouts: layout, uniform };
+    const { layout } = saveLayoutSchema.parse(req.body);
+    const userId = req.user!.id;
 
     const record = await prisma.dashboardLayout.upsert({
-      where: { userId: GLOBAL_LAYOUT_USER_ID },
-      create: { userId: GLOBAL_LAYOUT_USER_ID, layout: payload },
-      update: { layout: payload },
+      where: { userId },
+      create: { userId, layout },
+      update: { layout },
     });
 
-    const io = req.app.get('io');
-    if (io) {
-      io.emit('layout-updated', { layout, uniform });
-    }
-
-    res.json({ success: true, data: { layout, uniform } });
+    res.json({ success: true, data: record.layout });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ success: false, message: err.errors[0].message });

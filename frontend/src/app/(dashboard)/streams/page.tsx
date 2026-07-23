@@ -12,6 +12,7 @@ interface Go2rtcStream {
 }
 
 interface StreamFields {
+  useFfmpeg: boolean;
   user: string;
   pass: string;
   host: string;
@@ -21,6 +22,7 @@ interface StreamFields {
 }
 
 const emptyStream = (): StreamFields => ({
+  useFfmpeg: false,
   user: "",
   pass: "",
   host: "",
@@ -34,12 +36,16 @@ function parseStream(url?: string): StreamFields {
   if (!url) return parsed;
 
   const value = url.trim();
+  const useFfmpeg = /^ffmpeg:/i.test(value);
   const withoutPrefix = value.replace(/^ffmpeg:/i, "");
-  if (!withoutPrefix.toLowerCase().startsWith("rtsp://")) return { ...parsed, rawUrl: value };
+  if (!withoutPrefix.toLowerCase().startsWith("rtsp://")) {
+    return { ...parsed, useFfmpeg, rawUrl: value };
+  }
 
   try {
     const u = new URL(withoutPrefix);
     return {
+      useFfmpeg,
       user: decodeURIComponent(u.username),
       pass: decodeURIComponent(u.password),
       host: u.host,
@@ -48,13 +54,24 @@ function parseStream(url?: string): StreamFields {
       rawUrl: "",
     };
   } catch {
-    return { ...parsed, rawUrl: value };
+    return { ...parsed, useFfmpeg, rawUrl: value };
   }
 }
 
 function buildStream(fields: StreamFields): string {
   const raw = fields.rawUrl.trim();
-  if (!fields.host.trim()) return raw;
+  if (!fields.host.trim()) {
+    if (raw) {
+      if (fields.useFfmpeg && !/^ffmpeg:/i.test(raw)) {
+        return `ffmpeg:${raw}`;
+      }
+      if (!fields.useFfmpeg && /^ffmpeg:/i.test(raw)) {
+        return raw.replace(/^ffmpeg:/i, "");
+      }
+      return raw;
+    }
+    return "";
+  }
 
   const user = fields.user.trim();
   const pass = fields.pass.trim();
@@ -64,7 +81,9 @@ function buildStream(fields: StreamFields): string {
   const channels = fields.channels.trim().replace(/^\/+/, "");
   const format = fields.format.trim();
   const suffix = format ? (format.startsWith("#") ? format : `#${format}`) : "";
-  return `rtsp://${auth}${fields.host.trim()}${channels ? `/${channels}` : ""}${suffix}`;
+  const rtspUrl = `rtsp://${auth}${fields.host.trim()}${channels ? `/${channels}` : ""}${suffix}`;
+
+  return fields.useFfmpeg ? `ffmpeg:${rtspUrl}` : rtspUrl;
 }
 
 export default function StreamsPage() {
@@ -305,6 +324,16 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
 
           <div>
             <div className="space-y-3 border border-gray-800 rounded-lg p-3">
+              <label className="flex items-center gap-2 text-sm text-gray-300 font-medium cursor-pointer select-none pb-2 border-b border-gray-800">
+                <input
+                  type="checkbox"
+                  checked={streamFields.useFfmpeg}
+                  onChange={(e) => setStreamFields({ ...streamFields, useFfmpeg: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-600 focus:ring-offset-gray-900 cursor-pointer"
+                />
+                <span>{t("streams.useFfmpegLabel")}</span>
+              </label>
+
               <div className="grid grid-cols-2 gap-3">
                 <input
                   value={streamFields.user}
@@ -339,6 +368,7 @@ function StreamFormDialog({ stream, onClose, onSuccess }: DialogProps) {
                   value={streamFields.format}
                   onChange={(e) => setStreamFields({ ...streamFields, format: e.target.value })}
                   placeholder="#video=h264"
+                  title="Format parameter (e.g. #video=h264 or #video=h264#raw=-b:v 500k)"
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
                 />
               </div>

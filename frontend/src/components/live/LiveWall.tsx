@@ -90,35 +90,17 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
   return result;
 }
 
-// Force every tile in every breakpoint to a common w/h and reflow grid rows.
-function applyUniformAndReflow(
-  base: Layouts | null,
-  currentBp: BP,
-  targetW?: number,
-  targetH?: number,
-): Layouts | null {
+// Force every tile in every breakpoint to a common w/h. The common size is
+// taken from the first tile of the current breakpoint, falling back to the
+// breakpoint default. Positions are left untouched.
+function normalizeUniform(base: Layouts | null, currentBp: BP): Layouts | null {
   if (!base) return base;
   const cur = base[currentBp] ?? [];
-  const newW = targetW ?? cur[0]?.w ?? DEFAULT_W[currentBp];
-  const newH = targetH ?? cur[0]?.h ?? DEFAULT_H;
-
+  const w = cur[0]?.w ?? DEFAULT_W[currentBp];
+  const h = cur[0]?.h ?? DEFAULT_H;
   const next = {} as Layouts;
   (Object.keys(COLS) as BP[]).forEach((bp) => {
-    const cols = COLS[bp];
-    const clampedW = Math.min(newW, cols);
-    const clampedH = Math.max(2, newH);
-    const perRow = Math.max(1, Math.floor(cols / clampedW));
-
-    const bpItems = base[bp] ?? [];
-    const sorted = [...bpItems].sort((a, b) => a.y - b.y || a.x - b.x);
-
-    next[bp] = sorted.map((it, idx) => ({
-      ...it,
-      x: (idx % perRow) * clampedW,
-      y: Math.floor(idx / perRow) * clampedH,
-      w: clampedW,
-      h: clampedH,
-    }));
+    next[bp] = (base[bp] ?? []).map((it) => ({ ...it, w, h }));
   });
   return next;
 }
@@ -158,11 +140,11 @@ export function LiveWall() {
     videoEls.current[id] = el;
   }, []);
 
-  const persistLayout = useCallback((next: Layouts, uniformState: boolean) => {
+  const persistLayout = useCallback((next: Layouts) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       api
-        .put("/layout", { layout: next, uniform: uniformState })
+        .put("/layout", { layout: next })
         .catch((err) => console.error("Failed to save layout:", err));
     }, 800);
   }, []);
@@ -170,6 +152,7 @@ export function LiveWall() {
   // Restore preferences.
   useEffect(() => {
     setShowFeed(localStorage.getItem("liveShowFeed") !== "0");
+    setUniform(localStorage.getItem("liveUniform") === "1");
   }, []);
 
   const toggleFeed = useCallback(() => {
@@ -180,22 +163,23 @@ export function LiveWall() {
     });
   }, []);
 
-  // Turning uniform on immediately normalizes every tile to one common size and reflows rows.
+  // Turning uniform on immediately normalizes every tile to one common size.
   const toggleUniform = useCallback(() => {
     setUniform((prev) => {
-      const nextUniform = !prev;
-      localStorage.setItem("liveUniform", nextUniform ? "1" : "0");
-      setLayouts((cur) => {
-        const base = cur ?? savedLayoutRef.current;
-        const norm = nextUniform ? applyUniformAndReflow(base, currentBp) : base;
-        if (norm) {
-          savedLayoutRef.current = norm;
-          liveCache.setLayouts(norm);
-          persistLayout(norm, nextUniform);
-        }
-        return norm ?? cur;
-      });
-      return nextUniform;
+      const next = !prev;
+      localStorage.setItem("liveUniform", next ? "1" : "0");
+      if (next) {
+        setLayouts((cur) => {
+          const norm = normalizeUniform(cur ?? savedLayoutRef.current, currentBp);
+          if (norm) {
+            savedLayoutRef.current = norm;
+            liveCache.setLayouts(norm);
+            persistLayout(norm);
+          }
+          return norm ?? cur;
+        });
+      }
+      return next;
     });
   }, [currentBp, persistLayout]);
 
@@ -226,25 +210,14 @@ export function LiveWall() {
     }
   }, []);
 
-  // Load persisted layout & uniform state once on mount.
+  // Load persisted layout once on mount.
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get<{
-          success: boolean;
-          data: { layout: Layouts | null; uniform?: boolean } | null;
-        }>("/layout");
-        if (res.success && res.data) {
-          const fetchedLayouts = res.data.layout ?? null;
-          const fetchedUniform = !!res.data.uniform;
-
-          if (fetchedLayouts) {
-            savedLayoutRef.current = fetchedLayouts;
-            setLayouts(fetchedLayouts);
-            setUniform(fetchedUniform);
-            localStorage.setItem("liveUniform", fetchedUniform ? "1" : "0");
-          }
-        }
+        const res = await api.get<{ success: boolean; data: Layouts | null }>(
+          "/layout",
+        );
+        if (res.success && res.data) savedLayoutRef.current = res.data;
       } catch {
         // No saved layout yet; fall back to auto layout.
       } finally {
@@ -259,53 +232,39 @@ export function LiveWall() {
     if (loading || cameras.length === 0) return;
     setLayouts((prev) => {
       const merged = mergeLayouts(prev ?? savedLayoutRef.current, cameras);
-      return uniform ? applyUniformAndReflow(merged, currentBp) ?? merged : merged;
+      return uniform ? normalizeUniform(merged, currentBp) ?? merged : merged;
     });
   }, [cameras, loading, uniform, currentBp]);
 
   const handleLayoutChange = useCallback(
     (_current: Layout[], all: Layouts) => {
-      let next = all;
-      if (uniform) {
-        const cur = all[currentBp] ?? [];
-        const curW = cur[0]?.w ?? DEFAULT_W[currentBp];
-        const curH = cur[0]?.h ?? DEFAULT_H;
-
-        const normalized = {} as Layouts;
-        (Object.keys(COLS) as BP[]).forEach((bp) => {
-          normalized[bp] = (all[bp] ?? []).map((it) => ({
-            ...it,
-            w: curW,
-            h: curH,
-          }));
-        });
-        next = normalized;
-      }
+      // In uniform mode, keep every tile the same size so a drag/resize on one
+      // tile never leaves the others out of sync.
+      const next = uniform ? normalizeUniform(all, currentBp) ?? all : all;
       setLayouts(next);
       savedLayoutRef.current = next;
       liveCache.setLayouts(next);
-      persistLayout(next, uniform);
+      persistLayout(next);
     },
     [persistLayout, uniform, currentBp],
   );
 
   // When uniform mode is on, resizing one tile applies its new size to every
-  // tile in the current breakpoint and automatically reflows the grid.
+  // tile in the current breakpoint while leaving each tile's position intact.
   const handleResizeStop = useCallback(
     (current: Layout[], _old: Layout, updated: Layout) => {
+      if (!uniform) return;
       setLayouts((prev) => {
         const base = prev ?? savedLayoutRef.current;
         if (!base) return prev;
-        let next: Layouts;
-        if (uniform) {
-          const reflowed = applyUniformAndReflow(base, currentBp, updated.w, updated.h);
-          next = reflowed ?? base;
-        } else {
-          next = { ...base, [currentBp]: current } as Layouts;
-        }
+        const next = {} as Layouts;
+        (Object.keys(COLS) as BP[]).forEach((bp) => {
+          const items = bp === currentBp ? current : base[bp] ?? [];
+          next[bp] = items.map((it) => ({ ...it, w: updated.w, h: updated.h }));
+        });
         savedLayoutRef.current = next;
         liveCache.setLayouts(next);
-        persistLayout(next, uniform);
+        persistLayout(next);
         return next;
       });
     },
@@ -314,11 +273,10 @@ export function LiveWall() {
 
   const resetLayout = useCallback(() => {
     const fresh = mergeLayouts(null, cameras);
-    const next = uniform ? applyUniformAndReflow(fresh, currentBp) ?? fresh : fresh;
-    setLayouts(next);
-    savedLayoutRef.current = next;
-    persistLayout(next, uniform);
-  }, [cameras, currentBp, persistLayout, uniform]);
+    setLayouts(fresh);
+    savedLayoutRef.current = fresh;
+    persistLayout(fresh);
+  }, [cameras, persistLayout]);
 
   const handleNewEvent = useCallback((event: Event) => {
     setEventLog((prev) => [event, ...prev.slice(0, 49)]);
@@ -342,22 +300,7 @@ export function LiveWall() {
     [],
   );
 
-  const handleLayoutUpdated = useCallback(
-    (payload: { layout: Layouts; uniform: boolean }) => {
-      if (payload.layout) {
-        setLayouts(payload.layout);
-        savedLayoutRef.current = payload.layout;
-        liveCache.setLayouts(payload.layout);
-      }
-      if (typeof payload.uniform === "boolean") {
-        setUniform(payload.uniform);
-        localStorage.setItem("liveUniform", payload.uniform ? "1" : "0");
-      }
-    },
-    [],
-  );
-
-  useSocket(undefined, handleNewEvent, handleCameraStatus, handleLayoutUpdated);
+  useSocket(undefined, handleNewEvent, handleCameraStatus);
 
   const clearCameraEvent = (cameraId: string) => {
     setActiveEvents((prev) => {
