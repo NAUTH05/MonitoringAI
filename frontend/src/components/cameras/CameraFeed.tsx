@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Event } from "@/types";
-import { Volume2, VolumeX, ShieldAlert, Cpu, Repeat, WifiOff } from "lucide-react";
+import { Volume2, VolumeX, ShieldAlert, Cpu, Repeat, WifiOff, Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Go2RtcPlayer, PlayerState } from "./Go2RtcPlayer";
@@ -37,6 +37,7 @@ export function CameraFeed({
   const { t } = useTranslation();
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [useSub, setUseSub] = useState(false);
+  const [fitMode, setFitMode] = useState<"contain" | "cover">("contain");
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -122,7 +123,7 @@ export function CameraFeed({
               muted={!audioEnabled}
               videoRef={videoRef}
               onState={setPlayerState}
-              className="w-full h-full object-cover"
+              className={`w-full h-full ${fitMode === "contain" ? "object-contain" : "object-cover"} bg-black`}
             />
             {playerState !== "playing" && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -164,6 +165,14 @@ export function CameraFeed({
               ) : (
                 <VolumeX className="w-3.5 h-3.5" />
               )}
+            </button>
+            <button
+              onClick={() => setFitMode((v) => (v === "contain" ? "cover" : "contain"))}
+              title={fitMode === "contain" ? "Đang hiển thị vừa khung (Không cắt) - Click để lấp đầy" : "Đang lấp đầy khung - Click để xem vừa khung"}
+              className="p-1.5 rounded-lg bg-gray-900/80 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800 flex items-center gap-1"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-mono">{fitMode === "contain" ? "FIT" : "FILL"}</span>
             </button>
             {camera.subRtspUrl && (
               <button

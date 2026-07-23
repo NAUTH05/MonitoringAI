@@ -35,7 +35,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 // Breakpoint column counts and the default footprint a fresh camera takes.
 const COLS = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 } as const;
 const DEFAULT_W = { lg: 4, md: 5, sm: 3, xs: 4, xxs: 2 } as const;
-const DEFAULT_H = 4;
+const DEFAULT_H = { lg: 3, md: 4, sm: 3, xs: 4, xxs: 3 } as const;
 const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 } as const;
 type BP = keyof typeof COLS;
 
@@ -43,13 +43,14 @@ type BP = keyof typeof COLS;
 function buildDefault(bp: BP, cameras: Camera[]): Layout[] {
   const cols = COLS[bp];
   const w = DEFAULT_W[bp];
+  const h = DEFAULT_H[bp];
   const perRow = Math.max(1, Math.floor(cols / w));
   return cameras.map((cam, idx) => ({
     i: cam.id,
     x: (idx % perRow) * w,
-    y: Math.floor(idx / perRow) * DEFAULT_H,
+    y: Math.floor(idx / perRow) * h,
     w,
-    h: DEFAULT_H,
+    h,
   }));
 }
 
@@ -74,14 +75,15 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
       const maxY = kept.reduce((m, it) => Math.max(m, it.y + it.h), 0);
       const cols = COLS[bp];
       const w = DEFAULT_W[bp];
+      const h = DEFAULT_H[bp];
       const perRow = Math.max(1, Math.floor(cols / w));
       missing.forEach((cam, idx) => {
         kept.push({
           i: cam.id,
           x: (idx % perRow) * w,
-          y: maxY + Math.floor(idx / perRow) * DEFAULT_H,
+          y: maxY + Math.floor(idx / perRow) * h,
           w,
-          h: DEFAULT_H,
+          h,
         });
       });
     }
@@ -97,7 +99,7 @@ function normalizeUniform(base: Layouts | null, currentBp: BP): Layouts | null {
   if (!base) return base;
   const cur = base[currentBp] ?? [];
   const w = cur[0]?.w ?? DEFAULT_W[currentBp];
-  const h = cur[0]?.h ?? DEFAULT_H;
+  const h = cur[0]?.h ?? DEFAULT_H[currentBp];
   const next = {} as Layouts;
   (Object.keys(COLS) as BP[]).forEach((bp) => {
     next[bp] = (base[bp] ?? []).map((it) => ({ ...it, w, h }));
