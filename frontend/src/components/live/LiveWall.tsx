@@ -43,12 +43,36 @@ const DEFAULT_H = { lg: 3, md: 4, sm: 3, xs: 4, xxs: 3 } as const;
 const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 } as const;
 type BP = keyof typeof COLS;
 
-// Build a fresh layout for a breakpoint, flowing cameras left-to-right.
+// Build a fresh, perfectly aligned grid layout for a breakpoint, flowing cameras left-to-right.
 function buildDefault(bp: BP, cameras: Camera[]): Layout[] {
   const cols = COLS[bp];
-  const w = DEFAULT_W[bp];
-  const h = DEFAULT_H[bp];
-  const perRow = Math.max(1, Math.floor(cols / w));
+  const N = cameras.length;
+  let perRow: number;
+  let w: number;
+  let h: number;
+
+  if (bp === "lg") {
+    if (N <= 4) {
+      perRow = 2; w = 6; h = 4;
+    } else if (N <= 9) {
+      perRow = 3; w = 4; h = 3;
+    } else {
+      perRow = 4; w = 3; h = 3;
+    }
+  } else if (bp === "md") {
+    if (N <= 4) {
+      perRow = 2; w = 5; h = 4;
+    } else {
+      perRow = 2; w = 5; h = 3;
+    }
+  } else if (bp === "sm") {
+    perRow = 2; w = 3; h = 3;
+  } else if (bp === "xs") {
+    perRow = 1; w = 4; h = 3;
+  } else {
+    perRow = 1; w = 2; h = 3;
+  }
+
   return cameras.map((cam, idx) => ({
     i: cam.id,
     x: (idx % perRow) * w,
@@ -211,7 +235,6 @@ export function LiveWall() {
           if (norm) {
             savedLayoutRef.current = norm;
             liveCache.setLayouts(norm);
-            persistLayout(norm);
           }
           return norm ?? cur;
         });
@@ -220,7 +243,7 @@ export function LiveWall() {
       }
       return next;
     });
-  }, [currentBp, persistLayout]);
+  }, [currentBp]);
 
   const fetchCameras = useCallback(async () => {
     try {
@@ -293,9 +316,8 @@ export function LiveWall() {
       setLayouts(next);
       savedLayoutRef.current = next;
       liveCache.setLayouts(next);
-      persistLayout(next);
     },
-    [persistLayout, uniform, currentBp],
+    [uniform, currentBp],
   );
 
   // When uniform mode is on, resizing ANY tile applies its new size (w, h) to EVERY
@@ -316,26 +338,27 @@ export function LiveWall() {
         });
         savedLayoutRef.current = next;
         liveCache.setLayouts(next);
-        persistLayout(next);
         return next;
       });
     },
-    [uniform, currentBp, persistLayout],
+    [uniform, currentBp],
   );
 
-  // Requirement 1: Auto arrange clean box grid
+  // Requirement 1: Auto arrange clean box grid for all cameras
   const autoArrange = useCallback(() => {
     if (cameras.length === 0) return;
-    const fresh = mergeLayouts(null, cameras);
-    const finalLayout = uniform ? normalizeUniform(fresh, currentBp) ?? fresh : fresh;
+    const fresh = {} as Layouts;
+    (Object.keys(COLS) as BP[]).forEach((bp) => {
+      fresh[bp] = buildDefault(bp, cameras);
+    });
+    const finalLayout = uniform ? normalizeUniform(fresh, currentBp, lastResizedSizeRef.current) ?? fresh : fresh;
     setLayouts(finalLayout);
     savedLayoutRef.current = finalLayout;
     liveCache.setLayouts(finalLayout);
-    persistLayout(finalLayout);
-    showNotification("✦ Đã tự động sắp xếp gọn các ô camera!");
-  }, [cameras, currentBp, persistLayout, showNotification, uniform]);
+    showNotification("✦ Đã tự động sắp xếp gọn các ô camera! (Bấm nút 'Lưu' nếu muốn lưu)");
+  }, [cameras, currentBp, showNotification, uniform]);
 
-  // Requirement 2: Save custom layout & Restore saved layout
+  // Requirement 2: EXPLICIT Save custom layout ONLY when user clicks Save button!
   const saveCustomLayout = useCallback(() => {
     if (!layouts) return;
     userSavedLayoutRef.current = layouts;
@@ -345,7 +368,7 @@ export function LiveWall() {
       /* ignore */
     }
     persistLayout(layouts);
-    showNotification("✓ Đã lưu bố cục hiện tại!");
+    showNotification("✓ Đã lưu bố cục thành công!");
   }, [layouts, persistLayout, showNotification]);
 
   const restoreSavedLayout = useCallback(() => {
@@ -363,12 +386,11 @@ export function LiveWall() {
       setLayouts(saved);
       savedLayoutRef.current = saved;
       liveCache.setLayouts(saved);
-      persistLayout(saved);
       showNotification("↺ Đã khôi phục về bố cục đã lưu!");
     } else {
       autoArrange();
     }
-  }, [autoArrange, persistLayout, showNotification]);
+  }, [autoArrange, showNotification]);
 
   const handleNewEvent = useCallback((event: Event) => {
     setEventLog((prev) => [event, ...prev.slice(0, 49)]);
