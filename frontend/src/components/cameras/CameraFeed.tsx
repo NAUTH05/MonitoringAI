@@ -249,7 +249,7 @@ export function CameraFeed({
             onClick={() => setIsPopupOpen(false)}
           >
             <div
-              className="relative w-full max-w-5xl h-[85vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              className="relative w-full max-w-[110rem] h-[85vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header Bar */}
