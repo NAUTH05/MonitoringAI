@@ -1,8 +1,20 @@
 "use client";
 
 import { Camera, Event } from "@/types";
-import { Volume2, VolumeX, ShieldAlert, WifiOff, RotateCw, X, Shield } from "lucide-react";
+import { captureFrameLocal, recordLocal } from "@/lib/capture";
+import {
+  Volume2,
+  VolumeX,
+  ShieldAlert,
+  WifiOff,
+  RotateCw,
+  X,
+  Shield,
+  Camera as CameraIcon,
+  Video as VideoIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Go2RtcPlayer, PlayerState } from "./Go2RtcPlayer";
 
@@ -40,8 +52,9 @@ export function CameraFeed({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const popupVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Requirement 6: Small grid view ALWAYS defaults to SUB stream (if present, else main)
+  // Small grid view ALWAYS defaults to SUB stream (if present, else main)
   const gridUrl = camera.subRtspUrl ? camera.subRtspUrl : camera.rtspUrl;
   const gridStreamName = deriveStreamName(gridUrl);
 
@@ -58,6 +71,7 @@ export function CameraFeed({
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = !audioEnabled;
+    if (popupVideoRef.current) popupVideoRef.current.muted = !audioEnabled;
   }, [audioEnabled]);
 
   // Handle Escape key to close popup modal
@@ -95,7 +109,7 @@ export function CameraFeed({
             </div>
           ) : gridStreamName ? (
             <>
-              {/* Requirement 5: Forced FIT scale mode (object-contain bg-black) */}
+              {/* Forced FIT scale mode (object-contain bg-black) */}
               <Go2RtcPlayer
                 key={`${gridStreamName}-${reloadKey}`}
                 streamName={gridStreamName}
@@ -179,84 +193,121 @@ export function CameraFeed({
         </div>
       </div>
 
-      {/* FULLSCREEN POPUP MODAL (Playing MAIN STREAM HD) */}
-      {isPopupOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6"
-          onClick={() => setIsPopupOpen(false)}
-        >
+      {/* FULLSCREEN POPUP MODAL (Rendered via Portal to body so it floats in exact center of screen) */}
+      {isPopupOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="relative w-full max-w-6xl h-[88vh] bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 select-none animate-in fade-in duration-150"
+            onClick={() => setIsPopupOpen(false)}
           >
-            {/* Modal Header */}
-            <div className="px-4 py-3 bg-neutral-900 border-b border-neutral-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
-                  <Shield className="w-4 h-4 text-blue-400" />
+            <div
+              className="relative w-full max-w-5xl h-[85vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header Bar */}
+              <div className="px-5 py-3.5 bg-neutral-900 border-b border-neutral-800 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-blue-950/60 border border-blue-800/60 flex items-center justify-center shrink-0">
+                    <Shield className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-neutral-100 text-sm truncate flex items-center gap-2">
+                      <span>{camera.name}</span>
+                      <span className="px-2 py-0.5 rounded bg-blue-950 border border-blue-800 text-[10px] font-mono text-blue-300">
+                        LUỒNG CHÍNH (MAIN HD)
+                      </span>
+                    </h3>
+                    {camera.location && (
+                      <p className="text-xs text-neutral-400 truncate">{camera.location}</p>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-neutral-100 text-sm truncate flex items-center gap-2">
-                    <span>{camera.name}</span>
-                    <span className="px-2 py-0.5 rounded bg-blue-950 border border-blue-800 text-[10px] font-mono text-blue-300">
-                      LUỒNG CHÍNH (MAIN HD)
-                    </span>
-                  </h3>
-                  {camera.location && (
-                    <p className="text-xs text-neutral-400 truncate">{camera.location}</p>
-                  )}
+
+                {/* Modal Controls (Snapshot, Record, Audio, Reload, Close) */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Snapshot / Capture Button */}
+                  <button
+                    onClick={() => {
+                      if (popupVideoRef.current) {
+                        captureFrameLocal(popupVideoRef.current, camera.name);
+                      }
+                    }}
+                    title="Chụp ảnh màn hình (Snapshot)"
+                    className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700 transition flex items-center gap-1.5 text-xs font-medium"
+                  >
+                    <CameraIcon className="w-4 h-4 text-emerald-400" />
+                    <span className="hidden sm:inline">Chụp ảnh</span>
+                  </button>
+
+                  {/* Record Button */}
+                  <button
+                    onClick={() => {
+                      if (popupVideoRef.current) {
+                        recordLocal(popupVideoRef.current, camera.name, 10000);
+                      }
+                    }}
+                    title="Quay video màn hình 10 giây (Record)"
+                    className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700 transition flex items-center gap-1.5 text-xs font-medium"
+                  >
+                    <VideoIcon className="w-4 h-4 text-red-400" />
+                    <span className="hidden sm:inline">Ghi hình (10s)</span>
+                  </button>
+
+                  {/* Audio Mute / Unmute */}
+                  <button
+                    onClick={() => setAudioEnabled((v) => !v)}
+                    title={audioEnabled ? t("cameraFeed.muteAudio") : t("cameraFeed.unmuteAudio")}
+                    className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition"
+                  >
+                    {audioEnabled ? (
+                      <Volume2 className="w-4 h-4 text-red-400" />
+                    ) : (
+                      <VolumeX className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {/* Reload Stream */}
+                  <button
+                    onClick={() => setReloadKey((k) => k + 1)}
+                    title="Tải lại luồng"
+                    className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+
+                  {/* Close Modal X */}
+                  <button
+                    onClick={() => setIsPopupOpen(false)}
+                    className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
+                    title="Đóng (Esc)"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
 
-              {/* Modal Actions */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setAudioEnabled((v) => !v)}
-                  title={audioEnabled ? t("cameraFeed.muteAudio") : t("cameraFeed.unmuteAudio")}
-                  className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition"
-                >
-                  {audioEnabled ? (
-                    <Volume2 className="w-4 h-4 text-red-400" />
-                  ) : (
-                    <VolumeX className="w-4 h-4" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  title="Tải lại luồng"
-                  className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition"
-                >
-                  <RotateCw className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setIsPopupOpen(false)}
-                  className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
-                  title="Đóng (Esc)"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+              {/* Modal Video Container */}
+              <div className="flex-1 min-h-0 bg-black relative flex items-center justify-center">
+                {mainStreamName ? (
+                  <Go2RtcPlayer
+                    key={`popup-${mainStreamName}-${reloadKey}`}
+                    streamName={mainStreamName}
+                    active
+                    muted={!audioEnabled}
+                    videoRef={popupVideoRef}
+                    className="w-full h-full object-contain bg-black"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-neutral-500">
+                    <span>Không tìm thấy luồng chính HD</span>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Modal Video Player */}
-            <div className="flex-1 min-h-0 bg-black relative">
-              {mainStreamName ? (
-                <Go2RtcPlayer
-                  key={`popup-${mainStreamName}-${reloadKey}`}
-                  streamName={mainStreamName}
-                  active
-                  muted={!audioEnabled}
-                  className="w-full h-full object-contain bg-black"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-neutral-500">
-                  <span>Không tìm thấy luồng chính HD</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
