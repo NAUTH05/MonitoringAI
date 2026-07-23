@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Camera as CameraIcon,
   Check,
+  Cpu,
   GripVertical,
   Grid2x2,
   Monitor,
@@ -78,6 +79,10 @@ function buildDefault(bp: BP, cameras: Camera[]): Layout[] {
     y: Math.floor(idx / perRow) * h,
     w,
     h,
+    minW: 3,
+    minH: 3,
+    maxW: 12,
+    maxH: 12,
   }));
 }
 
@@ -93,7 +98,7 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
     // Keep saved positions for cameras that still exist.
     cameras.forEach((cam) => {
       const existing = byId.get(cam.id);
-      if (existing) kept.push({ ...existing, i: cam.id });
+      if (existing) kept.push({ ...existing, i: cam.id, minW: 3, minH: 3, maxW: 12, maxH: 12 });
     });
 
     // Append any new cameras below the current arrangement.
@@ -111,6 +116,10 @@ function mergeLayouts(saved: Layouts | null, cameras: Camera[]): Layouts {
           y: maxY + Math.floor(idx / perRow) * h,
           w,
           h,
+          minW: 3,
+          minH: 3,
+          maxW: 12,
+          maxH: 12,
         });
       });
     }
@@ -651,11 +660,35 @@ export function LiveWall() {
                     key={camera.id}
                     className="flex flex-col overflow-hidden"
                   >
-                    <div className="cam-drag-handle flex items-center gap-1.5 px-2 py-1 bg-neutral-900 border border-neutral-800 border-b-0 rounded-t-lg cursor-move select-none">
-                      <GripVertical className="w-3 h-3 text-neutral-600" />
-                      <span className="text-[11px] text-neutral-400 truncate">
-                        {camera.name}
-                      </span>
+                    <div className="cam-drag-handle flex items-center justify-between px-2.5 py-1.5 bg-neutral-950 border border-neutral-800 rounded-t-lg cursor-move select-none shrink-0 border-b-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <GripVertical className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+                        <span className="text-xs font-semibold text-neutral-200 truncate">{camera.name}</span>
+                        {camera.location && (
+                          <span className="text-[10px] text-neutral-500 truncate hidden sm:inline">
+                            ({camera.location})
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {camera.status === "ONLINE" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Online
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-neutral-600" />
+                            {camera.status}
+                          </span>
+                        )}
+                        {camera.cameraModules && camera.cameraModules.length > 0 && (
+                          <div className="flex items-center gap-0.5 text-neutral-400" title={`${camera.cameraModules.length} AI Module`}>
+                            <Cpu className="w-3 h-3 text-blue-400" />
+                            <span className="text-[10px] font-mono">{camera.cameraModules.length}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex-1 min-h-0">
                       <CameraFeed
