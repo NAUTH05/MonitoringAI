@@ -17,8 +17,8 @@ import {
   Camera as CameraIcon,
   Check,
   Cpu,
-  GripVertical,
   Grid2x2,
+  GripVertical,
   Monitor,
   PanelRightClose,
   PanelRightOpen,
@@ -28,9 +28,9 @@ import {
   Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Layout, Layouts, Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
+import { useTranslation } from "react-i18next";
 import "react-resizable/css/styles.css";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -226,12 +226,12 @@ export function LiveWall() {
                 // 16:9 widescreen (e.g. 1920x1080, 1280x720)
                 targetH = Math.max(3, Math.round(item.w * 0.75));
                 minW = 3;
-                minH = 3;
+                minH = 5;
               } else if (ratio >= 1.1) {
                 // 4:3 standard (e.g. 1280x960, 640x480)
                 targetH = Math.max(3, Math.round(item.w * 0.9));
                 minW = 3;
-                minH = 4;
+                minH = 5;
               } else {
                 // Vertical / Corridor 9:16 (e.g. 1080x1920)
                 targetH = Math.max(4, Math.round(item.w * 1.6));

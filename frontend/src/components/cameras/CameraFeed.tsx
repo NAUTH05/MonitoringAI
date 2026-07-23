@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Event } from "@/types";
-import { captureFrameLocal, recordLocal } from "@/lib/capture";
+import { captureFrameLocal, startRecordLocalManual, ActiveRecorder } from "@/lib/capture";
 import {
   Volume2,
   VolumeX,
@@ -50,6 +50,12 @@ export function CameraFeed({
   const [reloadKey, setReloadKey] = useState(0);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
+  // Unlimited manual video recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const recorderRef = useRef<ActiveRecorder | null>(null);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const popupVideoRef = useRef<HTMLVideoElement>(null);
@@ -83,6 +89,47 @@ export function CameraFeed({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isPopupOpen]);
+
+  // Auto-stop recording if modal is closed
+  useEffect(() => {
+    if (!isPopupOpen && isRecording) {
+      recorderRef.current?.stop();
+      recorderRef.current = null;
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      setIsRecording(false);
+      setRecordSeconds(0);
+    }
+  }, [isPopupOpen, isRecording]);
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      recorderRef.current?.stop();
+      recorderRef.current = null;
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      setIsRecording(false);
+      setRecordSeconds(0);
+    } else if (popupVideoRef.current) {
+      const rec = startRecordLocalManual(popupVideoRef.current, camera.name, () => {
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+        setIsRecording(false);
+        setRecordSeconds(0);
+      });
+      if (rec) {
+        recorderRef.current = rec;
+        setIsRecording(true);
+        setRecordSeconds(0);
+        recordTimerRef.current = setInterval(() => {
+          setRecordSeconds((s) => s + 1);
+        }, 1000);
+      }
+    }
+  };
+
+  const formatRecordTime = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <>
@@ -202,7 +249,7 @@ export function CameraFeed({
             onClick={() => setIsPopupOpen(false)}
           >
             <div
-              className="relative w-full max-w-5xl h-[85vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
+              className="relative w-full max-w-5xl h-[110vh] bg-neutral-950 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header Bar */}
@@ -240,19 +287,26 @@ export function CameraFeed({
                     <span className="hidden sm:inline">Chụp ảnh</span>
                   </button>
 
-                  {/* Record Button */}
-                  <button
-                    onClick={() => {
-                      if (popupVideoRef.current) {
-                        recordLocal(popupVideoRef.current, camera.name, 10000);
-                      }
-                    }}
-                    title="Quay video màn hình 10 giây (Record)"
-                    className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700 transition flex items-center gap-1.5 text-xs font-medium"
-                  >
-                    <VideoIcon className="w-4 h-4 text-red-400" />
-                    <span className="hidden sm:inline">Ghi hình (10s)</span>
-                  </button>
+                  {/* Record Button (Unlimited duration until user stops) */}
+                  {isRecording ? (
+                    <button
+                      onClick={toggleRecording}
+                      title="Nhấn vào đây để dừng ghi hình và lưu video"
+                      className="p-2 rounded-lg bg-red-950/90 border border-red-700 text-red-200 hover:bg-red-900 transition flex items-center gap-1.5 text-xs font-semibold animate-pulse"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                      <span>Dừng ghi ({formatRecordTime(recordSeconds)})</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={toggleRecording}
+                      title="Bắt đầu ghi hình (quay không giới hạn thời gian)"
+                      className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700 transition flex items-center gap-1.5 text-xs font-medium"
+                    >
+                      <VideoIcon className="w-4 h-4 text-red-400" />
+                      <span className="hidden sm:inline">Ghi hình</span>
+                    </button>
+                  )}
 
                   {/* Audio Mute / Unmute */}
                   <button

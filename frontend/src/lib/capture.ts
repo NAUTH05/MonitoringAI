@@ -60,6 +60,41 @@ export function recordLocal(
   return true;
 }
 
+export interface ActiveRecorder {
+  stop: () => void;
+}
+
+export function startRecordLocalManual(
+  video: HTMLVideoElement,
+  name: string,
+  onStop?: () => void,
+): ActiveRecorder | null {
+  const stream = (video as HTMLVideoElement & {
+    captureStream?: () => MediaStream;
+    mozCaptureStream?: () => MediaStream;
+  });
+  const src = stream.captureStream?.() ?? stream.mozCaptureStream?.();
+  if (!src) return null;
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+    ? "video/webm;codecs=vp9"
+    : "video/webm";
+  const rec = new MediaRecorder(src, { mimeType: mime });
+  const chunks: BlobPart[] = [];
+  rec.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data);
+  };
+  rec.onstop = () => {
+    downloadBlob(new Blob(chunks, { type: "video/webm" }), `rec_${name}_${stamp()}.webm`);
+    onStop?.();
+  };
+  rec.start();
+  return {
+    stop: () => {
+      if (rec.state !== "inactive") rec.stop();
+    },
+  };
+}
+
 // ---- Server-side (saved into evidence/ on the server) ----------------------
 
 export async function captureFrameServer(streamName: string): Promise<string> {
