@@ -24,6 +24,17 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  const onLive = pathname === "/live";
+
+  useEffect(() => {
+    if (ready && onLive) {
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [ready, onLive]);
+
   if (!ready) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-950">
@@ -34,17 +45,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  const onLive = pathname === "/live";
-
-  useEffect(() => {
-    if (onLive) {
-      const timer = setTimeout(() => {
-        window.dispatchEvent(new Event("resize"));
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [onLive]);
 
   return (
     <AlertProvider>
