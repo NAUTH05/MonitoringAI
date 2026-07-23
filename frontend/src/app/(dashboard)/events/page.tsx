@@ -13,6 +13,7 @@ import {
 import { Event, EventType, PaginatedResponse } from "@/types";
 import { Eye, Filter, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const EVENT_TYPES: EventType[] = [
   "INTRUSION",
@@ -24,6 +25,7 @@ const EVENT_TYPES: EventType[] = [
 ];
 
 export default function EventsPage() {
+  const { t } = useTranslation();
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -74,15 +76,15 @@ export default function EventsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Event Center</h1>
-          <p className="text-gray-400 text-sm mt-1">{total} total events</p>
+          <h1 className="text-2xl font-bold text-white">{t("events.title")}</h1>
+          <p className="text-gray-400 text-sm mt-1">{t("events.totalEvents", { total })}</p>
         </div>
         <button
           onClick={() => fetchEvents()}
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2.5 rounded-lg transition text-sm border border-gray-700"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          {t("common.refresh")}
         </button>
       </div>
 
@@ -90,7 +92,7 @@ export default function EventsPage() {
       <div className="flex flex-wrap gap-3 p-4 bg-gray-900 border border-gray-800 rounded-xl">
         <div className="flex items-center gap-2 text-gray-400 text-sm">
           <Filter className="w-4 h-4" />
-          <span>Filters:</span>
+          <span>{t("events.filters")}</span>
         </div>
         <select
           value={typeFilter}
@@ -100,10 +102,10 @@ export default function EventsPage() {
           }}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
         >
-          <option value="">All Types</option>
-          {EVENT_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          <option value="">{t("events.allTypes")}</option>
+          {EVENT_TYPES.map((et) => (
+            <option key={et} value={et}>
+              {t(`eventTypes.${et}`)}
             </option>
           ))}
         </select>
@@ -115,9 +117,9 @@ export default function EventsPage() {
           }}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
         >
-          <option value="">All Events</option>
-          <option value="true">Alerts Only</option>
-          <option value="false">Non-Alert Only</option>
+          <option value="">{t("events.allEvents")}</option>
+          <option value="true">{t("events.alertsOnly")}</option>
+          <option value="false">{t("events.nonAlertOnly")}</option>
         </select>
         <input
           type="date"
@@ -148,7 +150,7 @@ export default function EventsPage() {
             }}
             className="text-sm text-gray-400 hover:text-white transition underline"
           >
-            Clear filters
+            {t("events.clearFilters")}
           </button>
         )}
       </div>
@@ -160,25 +162,25 @@ export default function EventsPage() {
             <thead>
               <tr className="border-b border-gray-800 bg-gray-950/50">
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Event ID
+                  {t("events.colEventId")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Camera
+                  {t("events.colCamera")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Type
+                  {t("events.colType")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Confidence
+                  {t("events.colConfidence")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Alert
+                  {t("events.colAlert")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Timestamp
+                  {t("events.colTimestamp")}
                 </th>
                 <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Detail
+                  {t("events.colDetail")}
                 </th>
               </tr>
             </thead>
@@ -196,7 +198,7 @@ export default function EventsPage() {
               ) : events.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-gray-500">
-                    No events found
+                    {t("events.noEvents")}
                   </td>
                 </tr>
               ) : (
@@ -268,8 +270,11 @@ export default function EventsPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
             <p className="text-xs text-gray-400">
-              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)}{" "}
-              of {total}
+              {t("common.showingRange", {
+                from: (page - 1) * limit + 1,
+                to: Math.min(page * limit, total),
+                total,
+              })}
             </p>
             <div className="flex gap-1">
               <button
@@ -277,14 +282,14 @@ export default function EventsPage() {
                 disabled={page === 1}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 transition"
               >
-                Previous
+                {t("common.previous")}
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 transition"
               >
-                Next
+                {t("common.next")}
               </button>
             </div>
           </div>

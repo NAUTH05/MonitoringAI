@@ -6,6 +6,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { PaginatedResponse, User } from "@/types";
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const roleColors: Record<string, string> = {
   Admin: "bg-purple-500/20 text-purple-400 border-purple-500/30",
@@ -15,6 +16,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -47,12 +49,12 @@ export default function UsersPage() {
   }, [fetchUsers]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this user?")) return;
+    if (!confirm(t("users.deleteConfirm"))) return;
     try {
       await api.delete(`/users/${id}`);
       fetchUsers();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete");
+      alert(err instanceof Error ? err.message : t("users.deleteFailed"));
     }
   };
 
@@ -62,8 +64,8 @@ export default function UsersPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">User Management</h1>
-          <p className="text-gray-400 text-sm mt-1">{total} users registered</p>
+          <h1 className="text-2xl font-bold text-white">{t("users.title")}</h1>
+          <p className="text-gray-400 text-sm mt-1">{t("users.registered", { total })}</p>
         </div>
         <button
           onClick={() => {
@@ -73,7 +75,7 @@ export default function UsersPage() {
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg transition text-sm"
         >
           <Plus className="w-4 h-4" />
-          Add User
+          {t("users.addUser")}
         </button>
       </div>
 
@@ -86,7 +88,7 @@ export default function UsersPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Search users..."
+            placeholder={t("users.searchPlaceholder")}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
         </div>
@@ -104,22 +106,22 @@ export default function UsersPage() {
             <thead>
               <tr className="border-b border-gray-800 bg-gray-950/50">
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  User
+                  {t("users.colUser")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Email
+                  {t("users.colEmail")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Role
+                  {t("users.colRole")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Status
+                  {t("users.colStatus")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Created
+                  {t("users.colCreated")}
                 </th>
                 <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Actions
+                  {t("users.colActions")}
                 </th>
               </tr>
             </thead>
@@ -137,7 +139,7 @@ export default function UsersPage() {
               ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-500">
-                    No users found
+                    {t("users.noUsers")}
                   </td>
                 </tr>
               ) : (
@@ -174,7 +176,7 @@ export default function UsersPage() {
                             : "bg-red-500/20 text-red-400 border-red-500/30",
                         )}
                       >
-                        {user.isActive ? "Active" : "Inactive"}
+                        {user.isActive ? t("users.active") : t("users.inactive")}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-gray-400 text-xs">
@@ -208,8 +210,11 @@ export default function UsersPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
             <p className="text-xs text-gray-400">
-              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)}{" "}
-              of {total}
+              {t("common.showingRange", {
+                from: (page - 1) * limit + 1,
+                to: Math.min(page * limit, total),
+                total,
+              })}
             </p>
             <div className="flex gap-1">
               <button
@@ -217,14 +222,14 @@ export default function UsersPage() {
                 disabled={page === 1}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 transition"
               >
-                Previous
+                {t("common.previous")}
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 transition"
               >
-                Next
+                {t("common.next")}
               </button>
             </div>
           </div>

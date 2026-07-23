@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/hooks/useAuth";
 import { Bell, LogOut, User } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface HeaderProps {
   alertCount?: number;
@@ -9,6 +10,7 @@ interface HeaderProps {
 
 export function Header({ alertCount = 0 }: HeaderProps) {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <header className="h-16 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between px-6 flex-shrink-0">
@@ -49,7 +51,7 @@ export function Header({ alertCount = 0 }: HeaderProps) {
         <button
           onClick={logout}
           className="p-2 text-neutral-400 hover:text-red-400 transition rounded-md hover:bg-neutral-900"
-          title="Logout"
+          title={t("header.logout")}
         >
           <LogOut className="w-5 h-5" />
         </button>

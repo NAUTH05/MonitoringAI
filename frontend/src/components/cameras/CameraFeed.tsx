@@ -3,6 +3,7 @@
 import { Camera, Event } from "@/types";
 import { Volume2, VolumeX, ShieldAlert, Cpu, Repeat, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Go2RtcPlayer, PlayerState } from "./Go2RtcPlayer";
 
 interface CameraFeedProps {
@@ -33,10 +34,10 @@ export function CameraFeed({
   onClearEvent,
   onVideoRef,
 }: CameraFeedProps) {
+  const { t } = useTranslation();
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [useSub, setUseSub] = useState(false);
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
-  const [visible, setVisible] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -45,18 +46,6 @@ export function CameraFeed({
   const activeUrl = useSub && camera.subRtspUrl ? camera.subRtspUrl : camera.rtspUrl;
   const streamName = deriveStreamName(activeUrl);
   const isOnline = camera.status === "ONLINE";
-
-  // Only hold a stream connection while the tile is on screen (saves bandwidth).
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => setVisible(entry.isIntersecting),
-      { rootMargin: "100px" },
-    );
-    obs.observe(node);
-    return () => obs.disconnect();
-  }, []);
 
   // Register/unregister the video element with the parent for capture/record.
   useEffect(() => {
@@ -103,8 +92,8 @@ export function CameraFeed({
   // Auto-clear alert highlight after 6s.
   useEffect(() => {
     if (!activeEvent) return;
-    const t = setTimeout(() => onClearEvent?.(), 6000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => onClearEvent?.(), 6000);
+    return () => clearTimeout(timer);
   }, [activeEvent, onClearEvent]);
 
   return (
@@ -129,7 +118,7 @@ export function CameraFeed({
           <>
             <Go2RtcPlayer
               streamName={streamName}
-              active={visible}
+              active
               muted={!audioEnabled}
               videoRef={videoRef}
               onState={setPlayerState}
@@ -138,7 +127,7 @@ export function CameraFeed({
             {playerState !== "playing" && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <span className="text-[11px] font-mono text-neutral-400">
-                  {playerState === "error" ? "Reconnecting..." : "Connecting..."}
+                  {playerState === "error" ? t("cameraFeed.reconnecting") : t("cameraFeed.connecting")}
                 </span>
               </div>
             )}
@@ -146,10 +135,10 @@ export function CameraFeed({
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 gap-1">
             <span className="text-xs text-neutral-400">
-              Chưa có stream go2rtc cho camera này
+              {t("cameraFeed.noStream")}
             </span>
             <span className="text-[10px] text-neutral-600">
-              Thêm stream trong tab go2rtc Streams, đặt URL camera dạng .../stream.m3u8?src=NAME
+              {t("cameraFeed.noStreamHint")}
             </span>
           </div>
         )}
@@ -167,7 +156,7 @@ export function CameraFeed({
           <div className="absolute left-2 bottom-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => setAudioEnabled((v) => !v)}
-              title={audioEnabled ? "Tắt tiếng" : "Bật tiếng"}
+              title={audioEnabled ? t("cameraFeed.muteAudio") : t("cameraFeed.unmuteAudio")}
               className="p-1.5 rounded-lg bg-gray-900/80 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800"
             >
               {audioEnabled ? (
@@ -179,7 +168,7 @@ export function CameraFeed({
             {camera.subRtspUrl && (
               <button
                 onClick={() => setUseSub((v) => !v)}
-                title={useSub ? "Đang xem luồng phụ - đổi sang chính" : "Đang xem luồng chính - đổi sang phụ"}
+                title={useSub ? t("cameraFeed.switchToMain") : t("cameraFeed.switchToSub")}
                 className="p-1.5 rounded-lg bg-gray-900/80 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800 flex items-center gap-1"
               >
                 <Repeat className="w-3.5 h-3.5" />
@@ -224,7 +213,7 @@ export function CameraFeed({
           {isOnline ? (
             <span className="inline-flex items-center gap-1.5 text-[10px] text-neutral-300">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Online
+              {t("cameraFeed.online")}
             </span>
           ) : (
             <span
@@ -244,7 +233,7 @@ export function CameraFeed({
           {camera.cameraModules && camera.cameraModules.length > 0 && (
             <div
               className="flex items-center gap-0.5 text-neutral-500"
-              title={`${camera.cameraModules.length} AI Modules enabled`}
+              title={t("cameraFeed.aiModulesEnabled", { count: camera.cameraModules.length })}
             >
               <Cpu className="w-3 h-3" />
               <span className="text-[10px]">{camera.cameraModules.length}</span>

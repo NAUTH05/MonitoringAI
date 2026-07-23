@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { ApiResponse, Role, User } from "@/types";
 import { Loader2, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   user?: User;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function UserFormDialog({ user, onClose, onSuccess }: Props) {
+  const { t } = useTranslation();
   const isEdit = !!user;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -55,7 +57,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save user");
+      setError(err instanceof Error ? err.message : t("userForm.saveFailed"));
     } finally {
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">
-            {isEdit ? "Edit User" : "Add User"}
+            {isEdit ? t("userForm.editTitle") : t("userForm.addTitle")}
           </h2>
           <button
             onClick={onClose}
@@ -92,7 +94,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Username *
+              {t("userForm.usernameLabel")}
             </label>
             <input
               value={form.username}
@@ -104,7 +106,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Email *
+              {t("userForm.emailLabel")}
             </label>
             <input
               type="email"
@@ -117,10 +119,10 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Password{" "}
+              {t("userForm.passwordLabel")}{" "}
               {isEdit && (
                 <span className="text-gray-500">
-                  (leave blank to keep current)
+                  {t("userForm.passwordKeep")}
                 </span>
               )}
             </label>
@@ -130,14 +132,14 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required={!isEdit}
               minLength={6}
-              placeholder={isEdit ? "••••••" : "min 6 characters"}
+              placeholder={isEdit ? "••••••" : t("userForm.passwordPlaceholder")}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Role *
+              {t("userForm.roleLabel")}
             </label>
             <select
               value={form.roleId}
@@ -165,7 +167,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
                 />
                 <div className="w-10 h-5 bg-gray-700 peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:bg-blue-600 transition" />
               </label>
-              <span className="text-sm text-gray-300">Active</span>
+              <span className="text-sm text-gray-300">{t("userForm.active")}</span>
             </div>
           )}
 
@@ -181,7 +183,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
               onClick={onClose}
               className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-lg transition text-sm"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
@@ -189,7 +191,7 @@ export function UserFormDialog({ user, onClose, onSuccess }: Props) {
               className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2 text-sm"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? "Saving..." : isEdit ? "Save Changes" : "Create User"}
+              {loading ? t("common.saving") : isEdit ? t("common.saveChanges") : t("userForm.createUser")}
             </button>
           </div>
         </form>

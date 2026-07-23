@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type AlertPayload = Alert & { event: Event };
 
@@ -44,12 +45,13 @@ const textColors: Record<string, string> = {
 };
 
 export function AlertProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<AlertPayload[]>([]);
 
   const handleNewAlert = useCallback((data: AlertPayload) => {
     setToasts((prev) => [data, ...prev].slice(0, 5));
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== data.id));
+      setToasts((prev) => prev.filter((x) => x.id !== data.id));
     }, 8000);
   }, []);
 
@@ -67,7 +69,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   }, [handleNewAlert]);
 
   const remove = (id: string) =>
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev) => prev.filter((x) => x.id !== id));
 
   return (
     <>
@@ -91,13 +93,13 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`font-semibold text-sm ${textColor}`}>
-                    {eventType} Alert
+                    {t("alertToast.alertTitle", { type: eventType })}
                   </p>
                   <p className="text-gray-300 text-xs mt-0.5 truncate">
-                    {toast.event?.camera?.name ?? "Unknown camera"}
+                    {toast.event?.camera?.name ?? t("alertToast.unknownCamera")}
                   </p>
                   <p className="text-gray-400 text-xs">
-                    Confidence:{" "}
+                    {t("alertToast.confidence")}{" "}
                     {((toast.event?.confidence ?? 0) * 100).toFixed(1)}%
                   </p>
                   <p className="text-gray-500 text-xs mt-1">

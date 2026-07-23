@@ -15,8 +15,10 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function CamerasPage() {
+  const { t } = useTranslation();
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -54,7 +56,7 @@ export default function CamerasPage() {
   }, [fetchCameras]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this camera?")) return;
+    if (!confirm(t("cameras.deleteConfirm"))) return;
     await api.delete(`/cameras/${id}`);
     fetchCameras();
   };
@@ -72,9 +74,9 @@ export default function CamerasPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Camera Management</h1>
+          <h1 className="text-2xl font-bold text-white">{t("cameras.title")}</h1>
           <p className="text-gray-400 text-sm mt-1">
-            {total} cameras registered
+            {t("cameras.registered", { total })}
           </p>
         </div>
         <button
@@ -85,7 +87,7 @@ export default function CamerasPage() {
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg transition text-sm"
         >
           <Plus className="w-4 h-4" />
-          Add Camera
+          {t("cameras.addCamera")}
         </button>
       </div>
 
@@ -99,7 +101,7 @@ export default function CamerasPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Search cameras..."
+            placeholder={t("cameras.searchPlaceholder")}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
         </div>
@@ -111,10 +113,10 @@ export default function CamerasPage() {
           }}
           className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
         >
-          <option value="">All Status</option>
-          <option value="ONLINE">Online</option>
-          <option value="OFFLINE">Offline</option>
-          <option value="ERROR">Error</option>
+          <option value="">{t("cameras.allStatus")}</option>
+          <option value="ONLINE">{t("cameras.statusOnline")}</option>
+          <option value="OFFLINE">{t("cameras.statusOffline")}</option>
+          <option value="ERROR">{t("cameras.statusError")}</option>
         </select>
         <button
           onClick={fetchCameras}
@@ -131,25 +133,25 @@ export default function CamerasPage() {
             <thead>
               <tr className="border-b border-gray-800 bg-gray-950/50">
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Name
+                  {t("cameras.colName")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Location
+                  {t("cameras.colLocation")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  RTSP URL
+                  {t("cameras.colRtsp")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Status
+                  {t("cameras.colStatus")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  AI Modules
+                  {t("cameras.colModules")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Created
+                  {t("cameras.colCreated")}
                 </th>
                 <th className="text-right px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Actions
+                  {t("cameras.colActions")}
                 </th>
               </tr>
             </thead>
@@ -167,7 +169,7 @@ export default function CamerasPage() {
               ) : cameras.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-gray-500">
-                    No cameras found
+                    {t("cameras.noCameras")}
                   </td>
                 </tr>
               ) : (
@@ -190,11 +192,13 @@ export default function CamerasPage() {
                         )}
                       >
                         {statusIcon(cam.status)}
-                        {cam.status}
+                        {cam.status === "ONLINE" ? t("cameras.statusOnline") : cam.status === "OFFLINE" ? t("cameras.statusOffline") : t("cameras.statusError")}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-gray-300">
-                      {cam.cameraModules?.length ?? 0} modules
+                      {t("cameras.modulesCount", {
+                        count: cam.cameraModules?.length ?? 0,
+                      })}
                     </td>
                     <td className="px-4 py-4 text-gray-400 text-xs">
                       {formatDate(cam.createdAt)}
@@ -229,8 +233,11 @@ export default function CamerasPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
             <p className="text-xs text-gray-400">
-              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)}{" "}
-              of {total}
+              {t("common.showingRange", {
+                from: (page - 1) * limit + 1,
+                to: Math.min(page * limit, total),
+                total,
+              })}
             </p>
             <div className="flex gap-1">
               <button
@@ -238,14 +245,14 @@ export default function CamerasPage() {
                 disabled={page === 1}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                Previous
+                {t("common.previous")}
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-3 py-1.5 text-xs bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                Next
+                {t("common.next")}
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { ApiResponse, Camera, CameraStatus } from "@/types";
 import { Loader2, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const DEFAULT_HOST = "100.100.1.100";
 
@@ -57,6 +58,7 @@ interface Props {
 }
 
 export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
+  const { t } = useTranslation();
   const isEdit = !!camera;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -84,7 +86,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
     setError("");
     const rtspUrl = buildStream(mainStream);
     if (!rtspUrl) {
-      setError("Main stream is required");
+      setError(t("cameraForm.mainStreamRequired"));
       return;
     }
 
@@ -102,7 +104,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save camera");
+      setError(err instanceof Error ? err.message : t("cameraForm.saveFailed"));
     } finally {
       setLoading(false);
     }
@@ -118,7 +120,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-gray-300">{label}</span>
         <span className="text-[10px] text-gray-500 uppercase tracking-wider">
-          {required ? "Required" : "Optional"}
+          {required ? t("cameraForm.required") : t("cameraForm.optional")}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -139,7 +141,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
       <input
         value={value.rawUrl}
         onChange={(e) => onChange({ ...value, rawUrl: e.target.value })}
-        placeholder="Raw URL tùy chọn (http://.../stream.m3u8?src=...)"
+        placeholder={t("cameraForm.rawUrlPlaceholder")}
         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm font-mono"
       />
     </div>
@@ -155,7 +157,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">
-            {isEdit ? "Edit Camera" : "Add Camera"}
+            {isEdit ? t("cameraForm.editTitle") : t("cameraForm.addTitle")}
           </h2>
           <button
             onClick={onClose}
@@ -168,36 +170,36 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Camera Name *
+              {t("cameraForm.nameLabel")}
             </label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
-              placeholder="e.g. CAM-001"
+              placeholder={t("cameraForm.namePlaceholder")}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Location *
+              {t("cameraForm.locationLabel")}
             </label>
             <input
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
               required
-              placeholder="e.g. Main Entrance"
+              placeholder={t("cameraForm.locationPlaceholder")}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
             />
           </div>
 
-          {streamFields("Main Stream", mainStream, setMainStream, true)}
-          {streamFields("Sub Stream", subStream, setSubStream)}
+          {streamFields(t("cameraForm.mainStream"), mainStream, setMainStream, true)}
+          {streamFields(t("cameraForm.subStream"), subStream, setSubStream)}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Status
+              {t("cameraForm.statusLabel")}
             </label>
             <select
               value={form.status}
@@ -206,9 +208,9 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
               }
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
             >
-              <option value="ONLINE">Online</option>
-              <option value="OFFLINE">Offline</option>
-              <option value="ERROR">Error</option>
+              <option value="ONLINE">{t("cameras.statusOnline")}</option>
+              <option value="OFFLINE">{t("cameras.statusOffline")}</option>
+              <option value="ERROR">{t("cameras.statusError")}</option>
             </select>
           </div>
 
@@ -224,7 +226,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
               onClick={onClose}
               className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 rounded-lg transition text-sm"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
@@ -232,7 +234,7 @@ export function CameraFormDialog({ camera, onClose, onSuccess }: Props) {
               className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2 text-sm"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? "Saving..." : isEdit ? "Save Changes" : "Add Camera"}
+              {loading ? t("common.saving") : isEdit ? t("common.saveChanges") : t("cameraForm.addTitle")}
             </button>
           </div>
         </form>

@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useTranslation } from "react-i18next";
 
 interface DailyData {
   date: string;
@@ -16,18 +17,19 @@ interface DailyData {
 }
 
 export function AlertChart({ data }: { data: DailyData[] }) {
+  const { t } = useTranslation();
   const chartData = data.map((d) => ({
-    date: new Date(d.date).toLocaleDateString("en-US", {
+    date: new Date(d.date).toLocaleDateString("vi-VN", {
       month: "short",
       day: "numeric",
     }),
-    Alerts: d.count,
+    [t("reports.chartAlerts")]: d.count,
   }));
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
       <h3 className="text-sm font-semibold text-gray-300 mb-5">
-        Alert Trend (Last 7 Days)
+        {t("dashboard.alertTrend")}
       </h3>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart
@@ -63,7 +65,7 @@ export function AlertChart({ data }: { data: DailyData[] }) {
             cursor={{ fill: "rgba(37,99,235,0.1)" }}
           />
           <Bar
-            dataKey="Alerts"
+            dataKey={t("reports.chartAlerts")}
             fill="#2563eb"
             radius={[4, 4, 0, 0]}
             maxBarSize={40}

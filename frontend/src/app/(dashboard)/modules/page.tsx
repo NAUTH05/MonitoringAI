@@ -12,8 +12,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function ModulesPage() {
+  const { t } = useTranslation();
   const [modules, setModules] = useState<AiModule[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
@@ -100,10 +102,10 @@ export default function ModulesPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Cpu className="w-6 h-6 text-blue-500" />
-            AI Modules
+            {t("modules.title")}
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            {modules.length} detection modules available
+            {t("modules.available", { count: modules.length })}
           </p>
         </div>
         <button
@@ -112,7 +114,7 @@ export default function ModulesPage() {
             fetchAssigned(selectedCameraId);
           }}
           className="p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 hover:text-white transition"
-          title="Refresh"
+          title={t("common.refresh")}
         >
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -127,16 +129,16 @@ export default function ModulesPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search modules..."
+                placeholder={t("modules.searchPlaceholder")}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
           </div>
           <div className="divide-y divide-gray-800 max-h-[520px] overflow-y-auto">
             {loading ? (
-              <p className="p-6 text-center text-gray-500 text-sm">Loading...</p>
+              <p className="p-6 text-center text-gray-500 text-sm">{t("common.loadingDots")}</p>
             ) : filteredModules.length === 0 ? (
-              <p className="p-6 text-center text-gray-500 text-sm">No modules found</p>
+              <p className="p-6 text-center text-gray-500 text-sm">{t("modules.noModules")}</p>
             ) : (
               filteredModules.map((m) => (
                 <div key={m.id} className="p-4 flex items-start justify-between gap-3">
@@ -148,7 +150,7 @@ export default function ModulesPage() {
                       </span>
                       {!m.isActive && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20">
-                          inactive
+                          {t("modules.inactive")}
                         </span>
                       )}
                     </div>
@@ -164,14 +166,14 @@ export default function ModulesPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-800">
             <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Assign modules to camera
+              {t("modules.assignToCamera")}
             </label>
             <select
               value={selectedCameraId}
               onChange={(e) => setSelectedCameraId(e.target.value)}
               className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
-              {cameras.length === 0 && <option value="">No cameras</option>}
+              {cameras.length === 0 && <option value="">{t("modules.noCameras")}</option>}
               {cameras.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} — {c.location}
@@ -182,7 +184,7 @@ export default function ModulesPage() {
 
           <div className="divide-y divide-gray-800 max-h-[520px] overflow-y-auto">
             {!selectedCameraId ? (
-              <p className="p-6 text-center text-gray-500 text-sm">Select a camera</p>
+              <p className="p-6 text-center text-gray-500 text-sm">{t("modules.selectCamera")}</p>
             ) : (
               modules.map((m) => {
                 const cm = assignedMap.get(m.id);
@@ -200,7 +202,7 @@ export default function ModulesPage() {
                                 : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
                             }`}
                           >
-                            {cm!.isEnabled ? "enabled" : "disabled"}
+                            {cm!.isEnabled ? t("modules.enabled") : t("modules.disabled")}
                           </span>
                         )}
                       </div>
@@ -212,7 +214,7 @@ export default function ModulesPage() {
                             disabled={busy}
                             onClick={() => handleToggle(m.id)}
                             className="p-1.5 text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded transition disabled:opacity-40"
-                            title={cm!.isEnabled ? "Disable" : "Enable"}
+                            title={cm!.isEnabled ? t("modules.disable") : t("modules.enable")}
                           >
                             {cm!.isEnabled ? (
                               <PowerOff className="w-4 h-4" />
@@ -224,7 +226,7 @@ export default function ModulesPage() {
                             disabled={busy}
                             onClick={() => handleRemove(m.id)}
                             className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded transition disabled:opacity-40"
-                            title="Remove from camera"
+                            title={t("modules.removeFromCamera")}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -234,10 +236,10 @@ export default function ModulesPage() {
                           disabled={busy}
                           onClick={() => handleAssign(m.id)}
                           className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/30 rounded text-xs font-semibold transition disabled:opacity-40"
-                          title="Assign to camera"
+                          title={t("modules.assignToCameraBtn")}
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          Assign
+                          {t("modules.assign")}
                         </button>
                       )}
                     </div>

@@ -183,7 +183,7 @@ npm ci                                # bỏ qua nếu package-lock.json không 
 npm run build                         # NEXT_PUBLIC_* nhúng lúc build
 ```
 
-Thay đổi lần này (form RTSP có cấu trúc, uniform resize, backdrop dialog) chỉ ở `frontend/` → thường chỉ cần bước 3.
+Thay đổi lần này (i18n tiếng Việt toàn bộ giao diện) chỉ ở `frontend/` → chỉ cần bước 3.
 
 ### 4. Restart process qua PM2
 
