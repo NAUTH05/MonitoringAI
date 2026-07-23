@@ -25,7 +25,6 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  SlidersHorizontal,
   Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -186,7 +185,7 @@ export function LiveWall() {
   const [eventLog, setEventLog] = useState<Event[]>([]);
   const [showFeed, setShowFeed] = useState(true);
   const [uniform, setUniform] = useState(false);
-  const [gridGap, setGridGap] = useState<number>(4);
+  const [gridGap, setGridGap] = useState<number>(2);
   const [currentBp, setCurrentBp] = useState<BP>("lg");
   const [captureOpen, setCaptureOpen] = useState(false);
 
@@ -216,6 +215,7 @@ export function LiveWall() {
     setUniform(localStorage.getItem("liveUniform") === "1");
     const savedGap = localStorage.getItem("liveGridGap");
     if (savedGap) setGridGap(Number(savedGap));
+    else setGridGap(2);
 
     return () => clearTimeout(timer);
   }, []);
@@ -562,19 +562,6 @@ export function LiveWall() {
               title="Khôi phục về bố cục đã lưu gần nhất"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Gap size adjustment */}
-            <button
-              onClick={() => {
-                const nextGap = gridGap === 2 ? 4 : gridGap === 4 ? 8 : gridGap === 8 ? 12 : 2;
-                changeGridGap(nextGap);
-              }}
-              className="p-1.5 border border-neutral-800 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition flex items-center gap-1"
-              title={`Khoảng cách các khung camera: ${gridGap}px (Click để chuyển: 2px → 4px → 8px → 12px)`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-mono leading-none">{gridGap}px</span>
             </button>
 
             {/* Uniform size toggle */}
