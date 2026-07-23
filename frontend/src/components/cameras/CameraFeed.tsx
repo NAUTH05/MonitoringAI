@@ -12,6 +12,7 @@ interface CameraFeedProps {
   onClearEvent?: () => void;
   // Expose the underlying <video> so the parent can snapshot/record it.
   onVideoRef?: (id: string, el: HTMLVideoElement | null) => void;
+  onResolution?: (res: { width: number; height: number; aspectRatio: number }) => void;
 }
 
 function deriveStreamName(url: string): string | null {
@@ -29,6 +30,7 @@ export function CameraFeed({
   activeEvent,
   onClearEvent,
   onVideoRef,
+  onResolution,
 }: CameraFeedProps) {
   const { t } = useTranslation();
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -101,6 +103,7 @@ export function CameraFeed({
                 muted={!audioEnabled}
                 videoRef={videoRef}
                 onState={setPlayerState}
+                onResolution={onResolution}
                 className="w-full h-full object-contain bg-black"
               />
               {playerState !== "playing" && (

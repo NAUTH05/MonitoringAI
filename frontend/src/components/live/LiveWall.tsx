@@ -195,6 +195,69 @@ export function LiveWall() {
     videoEls.current[id] = el;
   }, []);
 
+  const [streamResolutions, setStreamResolutions] = useState<
+    Record<string, { width: number; height: number; aspectRatio: number }>
+  >({});
+
+  const handleResolution = useCallback(
+    (camId: string, res: { width: number; height: number; aspectRatio: number }) => {
+      setStreamResolutions((prev) => {
+        const existing = prev[camId];
+        if (existing && existing.width === res.width && existing.height === res.height) {
+          return prev;
+        }
+        const nextResolutions = { ...prev, [camId]: res };
+
+        // Automatically bind tile height & min size based on native stream resolution & aspect ratio!
+        setLayouts((curLayouts) => {
+          if (!curLayouts) return curLayouts;
+          const next = {} as Layouts;
+          (Object.keys(COLS) as BP[]).forEach((bp) => {
+            const items = curLayouts[bp] ?? [];
+            next[bp] = items.map((item) => {
+              if (item.i !== camId) return item;
+
+              const ratio = res.aspectRatio;
+              let targetH = item.h;
+              let minW = 3;
+              let minH = 3;
+
+              if (ratio >= 1.5) {
+                // 16:9 widescreen (e.g. 1920x1080, 1280x720)
+                targetH = Math.max(3, Math.round(item.w * 0.75));
+                minW = 3;
+                minH = 3;
+              } else if (ratio >= 1.1) {
+                // 4:3 standard (e.g. 1280x960, 640x480)
+                targetH = Math.max(3, Math.round(item.w * 0.9));
+                minW = 3;
+                minH = 4;
+              } else {
+                // Vertical / Corridor 9:16 (e.g. 1080x1920)
+                targetH = Math.max(4, Math.round(item.w * 1.6));
+                minW = 2;
+                minH = 5;
+              }
+
+              return {
+                ...item,
+                h: targetH,
+                minW,
+                minH,
+              };
+            });
+          });
+          savedLayoutRef.current = next;
+          liveCache.setLayouts(next);
+          return next;
+        });
+
+        return nextResolutions;
+      });
+    },
+    [],
+  );
+
   const persistLayout = useCallback((next: Layouts) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -658,6 +721,13 @@ export function LiveWall() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {streamResolutions[camera.id] && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400">
+                            {streamResolutions[camera.id].height >= 1080
+                              ? `${streamResolutions[camera.id].height}p HD`
+                              : `${streamResolutions[camera.id].width}x${streamResolutions[camera.id].height}`}
+                          </span>
+                        )}
                         {camera.status === "ONLINE" ? (
                           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -683,6 +753,7 @@ export function LiveWall() {
                         activeEvent={activeEvents[camera.id]}
                         onClearEvent={() => clearCameraEvent(camera.id)}
                         onVideoRef={registerVideo}
+                        onResolution={(res) => handleResolution(camera.id, res)}
                       />
                     </div>
                   </div>
