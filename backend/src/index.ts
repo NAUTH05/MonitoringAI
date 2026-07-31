@@ -28,6 +28,7 @@ import layoutRoutes from './routes/layout';
 import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
 import userRoutes from './routes/users';
+import licensePlateRoutes from './routes/license-plates';
 import { initSocket } from './socket';
 
 const app = express();
@@ -88,6 +89,7 @@ app.use('/api/go2rtc', go2rtcRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/layout', layoutRoutes);
+app.use('/api/license-plates', licensePlateRoutes);
 
 app.use(errorHandler);
 

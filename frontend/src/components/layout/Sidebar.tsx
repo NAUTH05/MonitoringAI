@@ -13,6 +13,7 @@ import {
   PanelLeftOpen,
   Shield,
   Users,
+  Car,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,6 +23,7 @@ import { useTranslation } from "react-i18next";
 const navItems = [
   { href: "/live", labelKey: "nav.liveView", icon: Monitor },
   { href: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { href: "/license-plates", labelKey: "nav.licensePlates", icon: Car },
   { href: "/cameras", labelKey: "nav.cameras", icon: Camera },
   { href: "/modules", labelKey: "nav.modules", icon: Cpu },
   { href: "/events", labelKey: "nav.events", icon: AlertTriangle },
