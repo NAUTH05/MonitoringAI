@@ -1,4 +1,5 @@
 import { Request, Response, Router } from 'express';
+import { Prisma } from '@prisma/client';
 import aicamPrisma from '../lib/aicamPrisma';
 import { authenticate } from '../middleware/auth';
 
@@ -71,9 +72,12 @@ router.get('/stats', authenticate, async (_req: Request, res: Response) => {
         plateColors,
       },
     });
-  } catch (err) {
-    console.error('Error fetching license plate stats:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch license plate stats' });
+  } catch (err: any) {
+    console.error('Error fetching license plate stats:', err?.message || err);
+    res.status(500).json({
+      success: false,
+      message: err?.message || 'Failed to fetch license plate stats',
+    });
   }
 });
 
@@ -82,20 +86,39 @@ router.get('/export', authenticate, async (req: Request, res: Response) => {
   try {
     const { search, vehicleType, plateColor, startDate, endDate } = req.query;
 
+    const conditions: Prisma.Sql[] = [Prisma.sql`plate_text IS NOT NULL AND plate_text != ''`];
+
+    if (search && (search as string).trim()) {
+      const searchPattern = `%${(search as string).trim()}%`;
+      conditions.push(Prisma.sql`LOWER(plate_text) LIKE LOWER(${searchPattern})`);
+    }
+
+    if (vehicleType && (vehicleType as string).trim()) {
+      conditions.push(Prisma.sql`vehicle_type = ${(vehicleType as string).trim()}`);
+    }
+
+    if (plateColor && (plateColor as string).trim()) {
+      conditions.push(Prisma.sql`plate_color = ${(plateColor as string).trim()}`);
+    }
+
+    if (startDate) {
+      conditions.push(Prisma.sql`event_time >= ${new Date(startDate as string)}`);
+    }
+
+    if (endDate) {
+      conditions.push(Prisma.sql`event_time <= ${new Date(endDate as string)}`);
+    }
+
+    const whereClause = Prisma.join(conditions, ' AND ');
+
     const events = await aicamPrisma.$queryRaw<LicensePlateEventRaw[]>`
       SELECT id, stream_id, task_name, event_time, plate_text, vehicle_type, plate_color, confidence, image_path, thumbnail_path, created_at
       FROM events
-      WHERE plate_text IS NOT NULL AND plate_text != ''
-        AND (${search ? `%${search}%` : null}::text IS NULL OR LOWER(plate_text) LIKE LOWER(${search ? `%${search}%` : ''}))
-        AND (${vehicleType || null}::text IS NULL OR vehicle_type = ${vehicleType || ''})
-        AND (${plateColor || null}::text IS NULL OR plate_color = ${plateColor || ''})
-        AND (${startDate ? new Date(startDate as string) : null}::timestamp IS NULL OR event_time >= ${startDate ? new Date(startDate as string) : new Date(0)})
-        AND (${endDate ? new Date(endDate as string) : null}::timestamp IS NULL OR event_time <= ${endDate ? new Date(endDate as string) : new Date(0)})
+      WHERE ${whereClause}
       ORDER BY event_time DESC
       LIMIT 5000;
     `;
 
-    // Convert to CSV string
     const headers = ['ID', 'Biển số xe', 'Loại xe', 'Màu biển', 'Độ tin cậy', 'Thời gian', 'Stream ID'];
     const rows = events.map((e) => [
       e.id,
@@ -111,10 +134,10 @@ router.get('/export', authenticate, async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="bien_so_xe_export.csv"');
-    res.send('\uFEFF' + csvContent); // BOM for Excel UTF-8
-  } catch (err) {
-    console.error('Error exporting license plates:', err);
-    res.status(500).json({ success: false, message: 'Failed to export license plates' });
+    res.send('\uFEFF' + csvContent);
+  } catch (err: any) {
+    console.error('Error exporting license plates:', err?.message || err);
+    res.status(500).json({ success: false, message: err?.message || 'Failed to export license plates' });
   }
 });
 
@@ -127,34 +150,43 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
     const offsetNum = (pageNum - 1) * limitNum;
 
-    const searchParam = search && (search as string).trim() ? `%${(search as string).trim()}%` : null;
-    const vehicleTypeParam = vehicleType && (vehicleType as string).trim() ? (vehicleType as string).trim() : null;
-    const plateColorParam = plateColor && (plateColor as string).trim() ? (plateColor as string).trim() : null;
-    const startDateParam = startDate ? new Date(startDate as string) : null;
-    const endDateParam = endDate ? new Date(endDate as string) : null;
+    const conditions: Prisma.Sql[] = [Prisma.sql`plate_text IS NOT NULL AND plate_text != ''`];
+
+    if (search && (search as string).trim()) {
+      const searchPattern = `%${(search as string).trim()}%`;
+      conditions.push(Prisma.sql`LOWER(plate_text) LIKE LOWER(${searchPattern})`);
+    }
+
+    if (vehicleType && (vehicleType as string).trim()) {
+      conditions.push(Prisma.sql`vehicle_type = ${(vehicleType as string).trim()}`);
+    }
+
+    if (plateColor && (plateColor as string).trim()) {
+      conditions.push(Prisma.sql`plate_color = ${(plateColor as string).trim()}`);
+    }
+
+    if (startDate) {
+      conditions.push(Prisma.sql`event_time >= ${new Date(startDate as string)}`);
+    }
+
+    if (endDate) {
+      conditions.push(Prisma.sql`event_time <= ${new Date(endDate as string)}`);
+    }
+
+    const whereClause = Prisma.join(conditions, ' AND ');
 
     const [events, countResult] = await Promise.all([
       aicamPrisma.$queryRaw<LicensePlateEventRaw[]>`
         SELECT id, stream_id, task_name, event_time, plate_text, vehicle_type, plate_color, confidence, image_path, thumbnail_path, created_at
         FROM events
-        WHERE plate_text IS NOT NULL AND plate_text != ''
-          AND (${searchParam}::text IS NULL OR LOWER(plate_text) LIKE LOWER(${searchParam}))
-          AND (${vehicleTypeParam}::text IS NULL OR vehicle_type = ${vehicleTypeParam})
-          AND (${plateColorParam}::text IS NULL OR plate_color = ${plateColorParam})
-          AND (${startDateParam}::timestamp IS NULL OR event_time >= ${startDateParam})
-          AND (${endDateParam}::timestamp IS NULL OR event_time <= ${endDateParam})
+        WHERE ${whereClause}
         ORDER BY event_time DESC
         LIMIT ${limitNum} OFFSET ${offsetNum};
       `,
       aicamPrisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*)::bigint as count
         FROM events
-        WHERE plate_text IS NOT NULL AND plate_text != ''
-          AND (${searchParam}::text IS NULL OR LOWER(plate_text) LIKE LOWER(${searchParam}))
-          AND (${vehicleTypeParam}::text IS NULL OR vehicle_type = ${vehicleTypeParam})
-          AND (${plateColorParam}::text IS NULL OR plate_color = ${plateColorParam})
-          AND (${startDateParam}::timestamp IS NULL OR event_time >= ${startDateParam})
-          AND (${endDateParam}::timestamp IS NULL OR event_time <= ${endDateParam});
+        WHERE ${whereClause};
       `,
     ]);
 
@@ -184,9 +216,12 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
         totalPages: Math.ceil(total / limitNum),
       },
     });
-  } catch (err) {
-    console.error('Error fetching license plates:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch license plates' });
+  } catch (err: any) {
+    console.error('Error fetching license plates:', err?.message || err);
+    res.status(500).json({
+      success: false,
+      message: err?.message || 'Failed to fetch license plates',
+    });
   }
 });
 
