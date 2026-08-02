@@ -7,12 +7,17 @@ import {
   Bus,
   Calendar,
   Car,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
+  ExternalLink,
   Eye,
   Filter,
+  Image as ImageIcon,
+  Maximize2,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -51,6 +56,11 @@ export function LicensePlatesDashboard() {
   const [limit] = useState(15);
   const [selectedEvent, setSelectedEvent] = useState<LicensePlateEvent | null>(null);
 
+  // Image viewer states
+  const [copied, setCopied] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState("");
@@ -58,6 +68,28 @@ export function LicensePlatesDashboard() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [exporting, setExporting] = useState(false);
+
+  const getMediaUrl = (path: string | null) => {
+    if (!path) return null;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
+    return `${baseUrl}/aicam-media/${path}`;
+  };
+
+  useEffect(() => {
+    if (selectedEvent) {
+      setImageError(false);
+      setCopied(false);
+      setIsZoomed(false);
+    }
+  }, [selectedEvent]);
+
+  const handleCopyPath = () => {
+    if (selectedEvent?.imagePath) {
+      navigator.clipboard.writeText(selectedEvent.imagePath);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -198,140 +230,112 @@ export function LicensePlatesDashboard() {
   const renderPlateBadge = (plateText: string, plateColor: string) => {
     const isYellow = plateColor?.toLowerCase() === "yellow";
     const isBlue = plateColor?.toLowerCase() === "blue";
+    const isRed = plateColor?.toLowerCase() === "red";
 
     let bgStyle = "bg-white text-gray-900 border-gray-300";
-    if (isYellow) {
-      bgStyle = "bg-amber-300 text-gray-950 border-amber-500 font-extrabold";
-    } else if (isBlue) {
-      bgStyle = "bg-blue-600 text-white border-blue-400 font-bold";
-    }
+    if (isYellow) bgStyle = "bg-amber-400 text-gray-950 border-amber-500 font-bold";
+    if (isBlue) bgStyle = "bg-blue-600 text-white border-blue-400 font-bold";
+    if (isRed) bgStyle = "bg-red-600 text-white border-red-400 font-bold";
 
     return (
-      <div
-        className={`inline-flex items-center gap-1 px-3 py-1 rounded-md font-mono text-sm border shadow-sm ${bgStyle}`}
+      <span
+        className={`inline-flex items-center justify-center px-3 py-1 rounded-md text-xs font-mono tracking-widest uppercase border-2 shadow-sm ${bgStyle}`}
       >
-        <span className="tracking-wider">{plateText}</span>
-      </div>
+        {plateText || "N/A"}
+      </span>
     );
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
             <Car className="w-7 h-7 text-blue-500" />
-            Giám sát Biển Số Xe (ANPR)
+            Nhận diện Biển số xe (ANPR)
           </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Hệ thống tự động nhận diện và lưu trữ dữ liệu biển số xe từ camera AI
+          <p className="text-sm text-gray-400 mt-1">
+            Quản lý và tra cứu thông tin phương tiện, biển số xe ghi nhận từ hệ thống AI Camera
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCsv}
-            disabled={exporting}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-lg transition text-sm font-medium shadow"
-          >
-            <Download className="w-4 h-4" />
-            {exporting ? "Đang xuất..." : "Xuất file CSV"}
-          </button>
-          <button
-            onClick={() => {
-              fetchStats();
-              fetchEvents();
-            }}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3.5 py-2 rounded-lg transition text-sm border border-gray-700"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Làm mới
-          </button>
-        </div>
+        <button
+          onClick={handleExportCsv}
+          disabled={exporting || events.length === 0}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-lg shadow-blue-500/20"
+        >
+          <Download className="w-4 h-4" />
+          {exporting ? "Đang xuất CSV..." : "Xuất báo cáo CSV"}
+        </button>
       </div>
 
-      {/* Overview Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Tổng số lượt quét</p>
-            <h3 className="text-2xl font-bold text-white mt-1">
-              {stats ? stats.totalPlates.toLocaleString("vi-VN") : "..."}
-            </h3>
-            <p className="text-emerald-400 text-xs mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Tất cả sự kiện ANPR
-            </p>
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Tổng biển số ghi nhận</p>
+              <h3 className="text-2xl font-bold text-white mt-1">{stats.totalPlates.toLocaleString()}</h3>
+            </div>
+            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
+              <Car className="w-6 h-6" />
+            </div>
           </div>
-          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
-            <ShieldCheck className="w-6 h-6" />
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Ghi nhận hôm nay</p>
+              <h3 className="text-2xl font-bold text-emerald-400 mt-1">{stats.todayPlates.toLocaleString()}</h3>
+            </div>
+            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Loại xe phổ biến</p>
+              <h3 className="text-lg font-bold text-white mt-1 capitalize">
+                {getVehicleTypeLabel(stats.vehicleTypes[0]?.type || "")}
+              </h3>
+            </div>
+            <div className="p-3 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20">
+              <Truck className="w-6 h-6" />
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Màu biển phổ biến</p>
+              <h3 className="text-lg font-bold text-white mt-1 capitalize">
+                {stats.plateColors[0]?.color || "N/A"}
+              </h3>
+            </div>
+            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/20">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Lượt quét hôm nay</p>
-            <h3 className="text-2xl font-bold text-white mt-1">
-              {stats ? stats.todayPlates.toLocaleString("vi-VN") : "..."}
-            </h3>
-            <p className="text-blue-400 text-xs mt-1">Cập nhật trong ngày</p>
-          </div>
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-            <Calendar className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Ô tô ghi nhận</p>
-            <h3 className="text-2xl font-bold text-white mt-1">
-              {stats
-                ? (stats.vehicleTypes.find((v) => v.type.toLowerCase() === "car")?.count || 0).toLocaleString("vi-VN")
-                : "..."}
-            </h3>
-            <p className="text-gray-400 text-xs mt-1">Phương tiện 4 bánh</p>
-          </div>
-          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
-            <Car className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">Xe máy ghi nhận</p>
-            <h3 className="text-2xl font-bold text-white mt-1">
-              {stats
-                ? (
-                    stats.vehicleTypes.find(
-                      (v) => v.type.toLowerCase() === "motorcycle" || v.type.toLowerCase() === "motorbike"
-                    )?.count || 0
-                  ).toLocaleString("vi-VN")
-                : "..."}
-            </h3>
-            <p className="text-gray-400 text-xs mt-1">Phương tiện 2 bánh</p>
-          </div>
-          <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-            <Bike className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3 shadow-sm">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+      {/* Filter Toolbar */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+        <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row gap-3">
           {/* Search Box */}
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
             <input
               type="text"
-              placeholder="Nhập biển số xe cần tìm (vd: 72LD17781, 60X64690)..."
+              placeholder="Nhập biển số xe cần tìm (Ví dụ: 50H, 80A...)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition"
             />
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
             {/* Vehicle Type Filter */}
             <select
               value={vehicleTypeFilter}
@@ -342,9 +346,9 @@ export function LicensePlatesDashboard() {
               className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
             >
               <option value="">Tất cả loại xe</option>
-              <option value="car">Ô tô (Car)</option>
-              <option value="motorcycle">Xe máy (Motorcycle)</option>
-              <option value="truck">Xe tải (Truck)</option>
+              <option value="car">Ô tô</option>
+              <option value="motorcycle">Xe máy</option>
+              <option value="truck">Xe tải</option>
               <option value="bus">Xe khách/Bus</option>
             </select>
 
@@ -361,9 +365,10 @@ export function LicensePlatesDashboard() {
               <option value="white">Biển trắng</option>
               <option value="yellow">Biển vàng</option>
               <option value="blue">Biển xanh</option>
+              <option value="red">Biển đỏ</option>
             </select>
 
-            {/* Date Filters */}
+            {/* Start Date */}
             <input
               type="date"
               value={startDate}
@@ -373,7 +378,8 @@ export function LicensePlatesDashboard() {
               }}
               className="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
             />
-            <span className="text-gray-500 text-xs">đến</span>
+
+            {/* End Date */}
             <input
               type="date"
               value={endDate}
@@ -424,6 +430,7 @@ export function LicensePlatesDashboard() {
               <thead className="bg-gray-950/80 border-b border-gray-800 text-xs text-gray-400 uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-4 font-semibold">Biển số xe</th>
+                  <th className="py-3.5 px-4 font-semibold">Ảnh bằng chứng</th>
                   <th className="py-3.5 px-4 font-semibold">Loại phương tiện</th>
                   <th className="py-3.5 px-4 font-semibold">Độ tin cậy AI</th>
                   <th className="py-3.5 px-4 font-semibold">Thời gian ghi nhận</th>
@@ -437,6 +444,33 @@ export function LicensePlatesDashboard() {
                     {/* Plate Badge */}
                     <td className="py-3.5 px-4">
                       {renderPlateBadge(event.plateText, event.plateColor)}
+                    </td>
+
+                    {/* Evidence Thumbnail */}
+                    <td className="py-3.5 px-4">
+                      {event.thumbnailPath || event.imagePath ? (
+                        <div
+                          onClick={() => setSelectedEvent(event)}
+                          title="Nhấn để xem ảnh phóng to"
+                          className="w-16 h-10 bg-gray-950 border border-gray-800 rounded-lg overflow-hidden cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-500/30 transition relative group"
+                        >
+                          <img
+                            src={getMediaUrl(event.thumbnailPath || event.imagePath)!}
+                            alt={event.plateText || "Ảnh biển số"}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                              const parent = (e.target as HTMLElement).parentElement;
+                              if (parent) {
+                                parent.classList.add("flex", "items-center", "justify-center");
+                                parent.innerHTML = `<span class="text-[10px] text-gray-500 font-mono">No img</span>`;
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500 italic">Không có ảnh</span>
+                      )}
                     </td>
 
                     {/* Vehicle Type */}
@@ -531,28 +565,113 @@ export function LicensePlatesDashboard() {
 
       {/* Detail Modal Dialog */}
       {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl space-y-4 p-6 relative">
-            <button
-              onClick={() => setSelectedEvent(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white bg-gray-800/80 p-1.5 rounded-full transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4 p-6 relative max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                  <Car className="w-6 h-6 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Chi tiết sự kiện ANPR</h3>
+                  <p className="text-xs font-mono text-gray-400">ID: {selectedEvent.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedEvent(null);
+                  setIsZoomed(false);
+                }}
+                className="text-gray-400 hover:text-white bg-gray-800/80 hover:bg-gray-700 p-2 rounded-full transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <div className="flex items-center gap-3">
-              <Car className="w-6 h-6 text-blue-400" />
-              <div>
-                <h3 className="text-lg font-bold text-white">Chi tiết sự kiện ANPR</h3>
-                <p className="text-xs text-gray-400">ID: {selectedEvent.id}</p>
+            {/* Identified Plate Badge */}
+            <div className="p-4 bg-gray-950 rounded-xl border border-gray-800 text-center space-y-2">
+              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Biển số xe nhận diện</p>
+              <div className="inline-block scale-110">{renderPlateBadge(selectedEvent.plateText, selectedEvent.plateColor)}</div>
+            </div>
+
+            {/* EVIDENCE IMAGE VIEWER CONTAINER */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Ảnh bằng chứng (ANPR Snapshot)</span>
+                </div>
+                {selectedEvent.imagePath && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleCopyPath}
+                      title="Sao chép đường dẫn file"
+                      className="inline-flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1 rounded-lg border border-gray-700 transition"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+                      {copied ? "Đã chép" : "Chép path"}
+                    </button>
+                    <a
+                      href={getMediaUrl(selectedEvent.imagePath)!}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Mở ảnh trong tab mới"
+                      className="inline-flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1 rounded-lg border border-gray-700 transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
+                      Mở ảnh
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Main Image Frame */}
+              <div className="relative group bg-gray-950 rounded-xl border border-gray-800 overflow-hidden aspect-video flex items-center justify-center">
+                {selectedEvent.imagePath ? (
+                  <>
+                    {!imageError ? (
+                      <>
+                        <img
+                          src={getMediaUrl(selectedEvent.imagePath)!}
+                          alt={`Bằng chứng biển số ${selectedEvent.plateText}`}
+                          className="w-full h-full object-contain cursor-zoom-in transition-transform duration-300 group-hover:scale-[1.01]"
+                          onClick={() => setIsZoomed(true)}
+                          onError={() => setImageError(true)}
+                        />
+                        <button
+                          onClick={() => setIsZoomed(true)}
+                          className="absolute bottom-3 right-3 bg-gray-900/80 hover:bg-gray-900 text-white p-2 rounded-lg backdrop-blur border border-gray-700/80 opacity-0 group-hover:opacity-100 transition duration-200 flex items-center gap-1.5 text-xs font-medium"
+                          title="Phóng to ảnh"
+                        >
+                          <Maximize2 className="w-4 h-4" /> Phóng to
+                        </button>
+                      </>
+                    ) : (
+                      /* Fallback layout if image fails to load */
+                      <div className="flex flex-col items-center justify-center p-6 text-center space-y-2">
+                        <div className="p-3 bg-amber-500/10 rounded-full border border-amber-500/20 text-amber-400">
+                          <ImageIcon className="w-8 h-8" />
+                        </div>
+                        <p className="text-sm font-semibold text-gray-300">Không tải được ảnh trên đĩa máy chủ</p>
+                        <p className="text-xs text-gray-500 max-w-md">
+                          Vui lòng kiểm tra lại cấu hình MinIO hoặc file vật lý tại đường dẫn:
+                        </p>
+                        <span className="font-mono text-[11px] bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800 text-blue-400 break-all block mt-1">
+                          {selectedEvent.imagePath}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center text-gray-500 p-6">
+                    <p className="text-sm">Không có dữ liệu hình ảnh cho sự kiện này</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="p-4 bg-gray-950 rounded-xl border border-gray-800 text-center space-y-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Biển số xe nhận diện</p>
-              <div className="inline-block">{renderPlateBadge(selectedEvent.plateText, selectedEvent.plateColor)}</div>
-            </div>
-
+            {/* Event Meta Grid */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="bg-gray-950/60 p-3 rounded-lg border border-gray-800/80">
                 <span className="text-xs text-gray-500 block">Loại phương tiện</span>
@@ -588,21 +707,42 @@ export function LicensePlatesDashboard() {
               <span className="font-mono text-xs text-gray-300 break-all">{selectedEvent.streamId}</span>
             </div>
 
-            {selectedEvent.imagePath && (
-              <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1">
-                <span className="text-xs text-gray-500 block">Đường dẫn ảnh bằng chứng</span>
-                <span className="font-mono text-xs text-blue-400 break-all">{selectedEvent.imagePath}</span>
-              </div>
-            )}
-
             <div className="pt-2 text-right">
               <button
-                onClick={() => setSelectedEvent(null)}
-                className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm transition"
+                onClick={() => {
+                  setSelectedEvent(null);
+                  setIsZoomed(false);
+                }}
+                className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-5 py-2 rounded-lg text-sm transition font-medium"
               >
                 Đóng
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Lightbox */}
+      {isZoomed && selectedEvent?.imagePath && !imageError && (
+        <div
+          onClick={() => setIsZoomed(false)}
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm animate-in fade-in duration-150 cursor-zoom-out"
+        >
+          <button
+            onClick={() => setIsZoomed(false)}
+            className="absolute top-4 right-4 text-gray-300 hover:text-white bg-gray-800/80 hover:bg-gray-700 p-2 rounded-full transition"
+            title="Đóng"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={getMediaUrl(selectedEvent.imagePath)!}
+            alt={`Bằng chứng biển số ${selectedEvent.plateText}`}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl cursor-default"
+          />
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2">
+            <div className="inline-block">{renderPlateBadge(selectedEvent.plateText, selectedEvent.plateColor)}</div>
           </div>
         </div>
       )}
