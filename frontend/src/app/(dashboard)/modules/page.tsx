@@ -197,6 +197,7 @@ export default function ModulesPage() {
               modules.map((m) => {
                 const cm = assignedMap.get(m.id);
                 const isAssigned = !!cm;
+                const isIntrusionModule = m.code === "INTRUSION";
                 const roiCount = Array.isArray(cm?.config?.roiPolygon)
                   ? cm.config.roiPolygon.length
                   : 0;
@@ -218,7 +219,7 @@ export default function ModulesPage() {
                           </span>
                         )}
                       </div>
-                      {isAssigned && (
+                      {isAssigned && isIntrusionModule && (
                         <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2">
                           <span>ROI Vùng cấm:</span>
                           <span className={roiCount > 0 ? "text-emerald-400 font-medium" : "text-gray-500"}>
@@ -230,19 +231,21 @@ export default function ModulesPage() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isAssigned ? (
                         <>
-                          <button
-                            disabled={busy || !selectedCamera}
-                            onClick={() => {
-                              if (selectedCamera) {
-                                setActiveRoiModal({ camera: selectedCamera, cameraModule: cm });
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-xs font-medium transition disabled:opacity-40"
-                            title="Vẽ Vùng Cấm ROI"
-                          >
-                            <Shapes className="w-3.5 h-3.5 text-purple-400" />
-                            Vẽ Vùng Cấm
-                          </button>
+                          {isIntrusionModule && (
+                            <button
+                              disabled={busy || !selectedCamera}
+                              onClick={() => {
+                                if (selectedCamera) {
+                                  setActiveRoiModal({ camera: selectedCamera, cameraModule: cm });
+                                }
+                              }}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-xs font-medium transition disabled:opacity-40"
+                              title="Vẽ Vùng Cấm ROI"
+                            >
+                              <Shapes className="w-3.5 h-3.5 text-purple-400" />
+                              Vẽ Vùng Cấm
+                            </button>
+                          )}
                           <button
                             disabled={busy}
                             onClick={() => handleToggle(m.id)}
