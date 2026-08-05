@@ -13,6 +13,7 @@ import {
   Move,
   RefreshCw,
   RotateCcw,
+  Sliders,
   Trash2,
   Video,
   X,
@@ -80,6 +81,10 @@ export function RoiDrawerModal({
   const [showViewAllModal, setShowViewAllModal] = useState(false);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
 
+  // Pixel calculation state (default 1920x1080 Full HD)
+  const [resWidth, setResWidth] = useState<number>(1920);
+  const [resHeight, setResHeight] = useState<number>(1080);
+
   // Resolve proper go2rtc stream name
   const rawUrl = camera.rtspUrl || camera.subRtspUrl;
   const streamName = deriveStreamName(rawUrl) || camera.name || camera.id;
@@ -123,7 +128,6 @@ export function RoiDrawerModal({
   }, []);
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    // If view all modal is open, ignore clicks
     if (showViewAllModal) return;
 
     if (activeDragIndex !== null) {
@@ -237,11 +241,21 @@ export function RoiDrawerModal({
 
   if (!isOpen) return null;
 
-  // Use 1000x1000 viewBox for standard SVG numeric points compliance (fixes console warning)
+  // Standard SVG numeric points string
   const polygonPointsStr = points.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ");
 
+  // Formatting strings
+  const textFormatStr = points
+    .map((p, i) => `#${i + 1} (X: ${p.x}, Y: ${p.y})`)
+    .join(", ");
   const jsonFormatStr = JSON.stringify(points, null, 2);
   const pythonFormatStr = `np.array([${points.map((p) => `[${p.x}, ${p.y}]`).join(", ")}])`;
+  const pixelFormatStr = points
+    .map(
+      (p, i) =>
+        `#${i + 1} (X: ${Math.round(p.x * resWidth)}px, Y: ${Math.round(p.y * resHeight)}px)`
+    )
+    .join(", ");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -487,18 +501,18 @@ export function RoiDrawerModal({
 
               <div className="h-4 w-px bg-gray-800 my-auto mx-1" />
 
-              {/* Copy Points Button */}
+              {/* Copy Points Button (#1 (X: xx, Y: yy)) */}
               <button
                 type="button"
-                onClick={() => copyToClipboard(jsonFormatStr, "json")}
+                onClick={() => copyToClipboard(textFormatStr, "text_fmt")}
                 disabled={points.length === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-800/40 disabled:opacity-50 rounded-lg transition"
-                title="Sao chép danh sách tọa độ (JSON)"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-800/40 disabled:opacity-50 rounded-lg transition font-medium"
+                title="Sao chép định dạng #1 (X: xx, Y: yy)"
               >
-                {copiedFormat === "json" ? (
+                {copiedFormat === "text_fmt" ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-400 font-medium">Đã chép!</span>
+                    <span className="text-emerald-400 font-bold">Đã chép!</span>
                   </>
                 ) : (
                   <>
@@ -527,7 +541,7 @@ export function RoiDrawerModal({
                 <span>Chưa vẽ điểm nào.</span>
               ) : (
                 <span className="font-mono text-[11px] text-gray-300">
-                  {points.map((p, i) => `#${i + 1}(${p.x}, ${p.y})`).join("  ")}
+                  {textFormatStr}
                 </span>
               )}
             </div>
@@ -559,7 +573,7 @@ export function RoiDrawerModal({
         </div>
       </div>
 
-      {/* Sub Modal: View & Copy All Coordinates (High z-index z-[100] & stopPropagation) */}
+      {/* Sub Modal: View & Copy All Coordinates */}
       {showViewAllModal && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -584,25 +598,84 @@ export function RoiDrawerModal({
             </div>
 
             <div className="p-6 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
-              {/* Formatted Tuple list */}
+              {/* Standard #1 (X: xx, Y: yy) Format */}
               <div>
-                <label className="text-gray-400 font-medium block mb-1.5">
-                  Danh sách {points.length} đỉnh đa giác (Thứ tự vẽ):
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-950 p-3 border border-gray-800 rounded-lg font-mono">
-                  {points.map((p, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-gray-900/80 px-2.5 py-1.5 rounded border border-gray-800">
-                      <span className="text-purple-400 font-bold">#{i + 1}:</span>
-                      <span className="text-gray-200">({p.x}, {p.y})</span>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-gray-400 font-medium">
+                    Định dạng Text (#1 (X: xx, Y: yy)):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(textFormatStr, "modal_text")}
+                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    {copiedFormat === "modal_text" ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                        <Check className="w-3.5 h-3.5" /> Đã chép vào bộ nhớ!
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Copy className="w-3 h-3" /> Copy Text
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 font-mono text-[11px] text-blue-300 overflow-x-auto">
+                  {textFormatStr}
+                </div>
+              </div>
+
+              {/* Pixel Calculator Converter */}
+              <div className="bg-gray-950/60 p-3 border border-gray-800 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-gray-300 font-medium">
+                    <Sliders className="w-4 h-4 text-blue-400" />
+                    <span>Quy đổi sang Tọa độ Pixel thực tế (theo độ phân giải Cam):</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(pixelFormatStr, "modal_pixel")}
+                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    {copiedFormat === "modal_pixel" ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                        <Check className="w-3.5 h-3.5" /> Đã chép Pixel!
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Copy className="w-3 h-3" /> Copy Pixel
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-gray-400 text-[11px]">Độ phân giải Cam:</label>
+                  <select
+                    value={`${resWidth}x${resHeight}`}
+                    onChange={(e) => {
+                      const [w, h] = e.target.value.split("x").map(Number);
+                      setResWidth(w);
+                      setResHeight(h);
+                    }}
+                    className="bg-gray-900 border border-gray-700 text-white rounded px-2 py-1 text-[11px]"
+                  >
+                    <option value="1920x1080">Full HD (1920 x 1080)</option>
+                    <option value="1280x720">HD (1280 x 720)</option>
+                    <option value="2560x1440">2K (2560 x 1440)</option>
+                    <option value="3840x2160">4K (3840 x 2160)</option>
+                  </select>
+                </div>
+
+                <div className="bg-gray-950 p-2.5 rounded border border-gray-800 font-mono text-[11px] text-cyan-300 overflow-x-auto">
+                  {pixelFormatStr}
                 </div>
               </div>
 
               {/* JSON Format */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-gray-400 font-medium">Định dạng JSON (Web / API):</label>
+                  <label className="text-gray-400 font-medium">Định dạng JSON (Web / REST API):</label>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(jsonFormatStr, "modal_json")}
