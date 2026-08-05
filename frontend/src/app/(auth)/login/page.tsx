@@ -5,6 +5,7 @@ import { ApiResponse, AuthUser } from "@/types";
 import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface LoginResponse {
   token: string;
@@ -13,6 +14,7 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -35,7 +37,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("login.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -50,7 +52,7 @@ export default function LoginPage() {
             <Shield className="w-8 h-8 text-blue-500" />
           </div>
           <h1 className="text-2xl font-bold text-white">Smart Monitoring AI</h1>
-          <p className="text-gray-400 mt-1 text-sm">Sign in to your account</p>
+          <p className="text-gray-400 mt-1 text-sm">{t("login.subtitle")}</p>
         </div>
 
         {/* Card */}
@@ -58,7 +60,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Email
+                {t("login.email")}
               </label>
               <input
                 type="email"
@@ -72,7 +74,7 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Password
+                {t("login.password")}
               </label>
               <div className="relative">
                 <input
@@ -109,14 +111,14 @@ export default function LoginPage() {
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? t("login.signingIn") : t("login.signIn")}
             </button>
           </form>
 
           {/* Demo credentials */}
           <div className="mt-6 pt-6 border-t border-gray-800">
             <p className="text-xs text-gray-500 text-center mb-3">
-              Demo credentials
+              {t("login.demoCredentials")}
             </p>
             <div className="space-y-2 text-xs text-gray-400">
               <div className="flex justify-between bg-gray-800/50 rounded px-3 py-2">

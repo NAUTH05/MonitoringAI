@@ -2,7 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import fs from 'fs';
-import { createServer } from 'http';
+import http, { IncomingMessage, createServer } from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
 import swaggerUi from 'swagger-ui-express';
@@ -28,6 +28,7 @@ import layoutRoutes from './routes/layout';
 import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
 import userRoutes from './routes/users';
+import licensePlateRoutes from './routes/license-plates';
 import { initSocket } from './socket';
 
 const app = express();
@@ -74,6 +75,51 @@ app.set('io', io);
 // Serve evidence files statically
 app.use('/evidence', express.static(evidenceDir));
 
+// Serve aicam event media (license plate snapshots) by proxying to MinIO S3 service or fallback to disk
+const defaultMinioDir = '/var/lib/minio/events';
+const aicamEventsDir = process.env.AICAM_EVENTS_DIR || (fs.existsSync(defaultMinioDir) ? defaultMinioDir : evidenceDir);
+
+const serveAicamMedia = (req: express.Request, res: express.Response) => {
+  const rawPath = req.params[0] || '';
+  const objectPath = rawPath.replace(/\/+$/, '');
+  if (!objectPath) {
+    res.status(400).json({ success: false, message: 'Invalid object path' });
+    return;
+  }
+
+  const minioHost = process.env.MINIO_HOST || '127.0.0.1';
+  const minioPort = process.env.MINIO_PORT || '9000';
+  const minioBucket = process.env.MINIO_BUCKET || 'events';
+  const targetUrl = `http://${minioHost}:${minioPort}/${minioBucket}/${objectPath}`;
+
+  const reqClient = http.get(targetUrl, (minioRes: IncomingMessage) => {
+    if (minioRes.statusCode === 200) {
+      res.setHeader('Content-Type', minioRes.headers['content-type'] || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      minioRes.pipe(res);
+    } else {
+      const fallbackFilePath = path.join(aicamEventsDir, objectPath);
+      if (fs.existsSync(fallbackFilePath) && fs.statSync(fallbackFilePath).isFile()) {
+        res.sendFile(fallbackFilePath);
+      } else {
+        res.status(minioRes.statusCode || 404).json({ success: false, message: 'Image not found in MinIO' });
+      }
+    }
+  });
+
+  reqClient.on('error', () => {
+    const fallbackFilePath = path.join(aicamEventsDir, objectPath);
+    if (fs.existsSync(fallbackFilePath) && fs.statSync(fallbackFilePath).isFile()) {
+      res.sendFile(fallbackFilePath);
+    } else {
+      res.status(404).json({ success: false, message: 'Failed to fetch image from MinIO' });
+    }
+  });
+};
+
+app.get('/api/aicam-media/*', serveAicamMedia);
+app.get('/aicam-media/*', serveAicamMedia);
+
 // API docs (Swagger UI)
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec as any));
 
@@ -88,6 +134,7 @@ app.use('/api/go2rtc', go2rtcRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/layout', layoutRoutes);
+app.use('/api/license-plates', licensePlateRoutes);
 
 app.use(errorHandler);
 

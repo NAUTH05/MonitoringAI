@@ -144,3 +144,84 @@ pm2 logs monitoring-backend        # xem log
 pm2 restart monitoring-backend     # restart sau khi build lại
 sudo journalctl -u go2rtc -f       # log go2rtc
 ```
+
+---
+
+## Cập nhật code từ nhánh `dev` lên server
+
+Áp dụng khi đã deploy lần đầu (các bước 1-8 xong) và chỉ cần kéo thay đổi mới từ nhánh `dev`. Chạy dưới user sở hữu `/opt/monitoringAI`.
+
+### 1. Kéo code mới
+
+```bash
+cd /opt/monitoringAI
+pm2 save                              # snapshot trạng thái process hiện tại (để rollback)
+git fetch origin
+git checkout dev                      # lần đầu; các lần sau bỏ qua nếu đã ở dev
+git pull --ff-only origin dev
+```
+
+Nếu `git pull` báo local có thay đổi lạ (vd `go2rtc.yaml` bị UI ghi đè): `git stash` trước khi pull, xử lý sau. KHÔNG `git reset --hard` nếu chưa chắc — sẽ mất cấu hình stream.
+
+### 2. Rebuild backend (chỉ khi `backend/` hoặc `prisma/` đổi)
+
+```bash
+cd /opt/monitoringAI/backend
+npm ci                                # bỏ qua nếu package-lock.json không đổi
+npx prisma generate                   # chỉ khi prisma/schema.prisma đổi
+npm run db:push                       # chỉ khi schema đổi (prisma db push, không migrations)
+npm run build                         # tsc -> dist/
+```
+
+KHÔNG chạy `npm run db:seed` khi update — sẽ ghi đè dữ liệu thật.
+
+### 3. Rebuild frontend (chỉ khi `frontend/` đổi)
+
+```bash
+cd /opt/monitoringAI/frontend
+npm ci                                # bỏ qua nếu package-lock.json không đổi
+npm run build                         # NEXT_PUBLIC_* nhúng lúc build
+```
+
+Thay đổi lần này (i18n tiếng Việt toàn bộ giao diện) chỉ ở `frontend/` → chỉ cần bước 3.
+
+### 4. Restart process qua PM2
+
+```bash
+cd /opt/monitoringAI
+pm2 restart monitoring-frontend       # nếu chỉ đổi frontend
+pm2 restart monitoring-backend        # nếu đổi backend
+# hoặc cả hai: pm2 restart ecosystem.config.js
+pm2 save
+```
+
+nginx và go2rtc KHÔNG cần restart trừ khi `nginx/monitoring.conf` hoặc `deploy/go2rtc.service` đổi:
+
+```bash
+sudo cp /opt/monitoringAI/nginx/monitoring.conf /etc/nginx/sites-available/monitoring
+sudo nginx -t && sudo systemctl reload nginx     # chỉ khi conf nginx đổi
+
+sudo cp /opt/monitoringAI/deploy/go2rtc.service /etc/systemd/system/go2rtc.service
+sudo systemctl daemon-reload && sudo systemctl restart go2rtc   # chỉ khi unit đổi
+```
+
+### 5. Kiểm tra sau update
+
+```bash
+pm2 status                            # cả 2 app phải online, không restart liên tục
+pm2 logs monitoring-frontend --lines 30
+curl -I http://localhost/             # nginx trả 200/307
+```
+
+Mở `http://<server-ip>/`, hard-refresh (Ctrl+Shift+R) để bỏ cache asset cũ, kiểm tra tính năng vừa deploy.
+
+### Rollback nếu lỗi
+
+```bash
+cd /opt/monitoringAI
+git log --oneline -5                  # tìm commit tốt trước đó
+git checkout <commit-cũ>
+# build lại phần liên quan (bước 2/3) rồi:
+pm2 restart ecosystem.config.js && pm2 save
+```
+

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { ApiResponse } from "@/types";
 import { BarChart2, Download, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Bar,
   BarChart,
@@ -44,6 +45,7 @@ const COLORS = [
 ];
 
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>("weekly");
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
@@ -113,12 +115,12 @@ export default function ReportsPage() {
           count,
         }))
       : (weeklyReport?.dailyData.map((d) => ({
-          date: new Date(d.date).toLocaleDateString("en-US", {
+          date: new Date(d.date).toLocaleDateString("vi-VN", {
             month: "short",
             day: "numeric",
           }),
-          Events: d.count,
-          Alerts: d.alerts,
+          [t("reports.chartEvents")]: d.count,
+          [t("reports.chartAlerts")]: d.alerts,
         })) ?? []);
 
   const pieData =
@@ -134,8 +136,8 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Reports</h1>
-          <p className="text-gray-400 text-sm mt-1">Analytics & statistics</p>
+          <h1 className="text-2xl font-bold text-white">{t("reports.title")}</h1>
+          <p className="text-gray-400 text-sm mt-1">{t("reports.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -143,14 +145,14 @@ export default function ReportsPage() {
             className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm transition"
           >
             <Download className="w-4 h-4" />
-            Export CSV
+            {t("reports.exportCsv")}
           </button>
           <button
             onClick={exportPDF}
             className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm transition"
           >
             <Download className="w-4 h-4" />
-            Print PDF
+            {t("reports.printPdf")}
           </button>
         </div>
       </div>
@@ -168,7 +170,7 @@ export default function ReportsPage() {
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              {p}
+              {t(`reports.period.${p}`)}
             </button>
           ))}
         </div>
@@ -198,19 +200,19 @@ export default function ReportsPage() {
           {period === "daily" && dailyReport && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">Total Events</p>
+                <p className="text-gray-400 text-sm">{t("reports.totalEvents")}</p>
                 <p className="text-3xl font-bold text-white mt-1">
                   {dailyReport.totalEvents}
                 </p>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">Total Alerts</p>
+                <p className="text-gray-400 text-sm">{t("reports.totalAlerts")}</p>
                 <p className="text-3xl font-bold text-red-400 mt-1">
                   {dailyReport.totalAlerts}
                 </p>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">Alert Rate</p>
+                <p className="text-gray-400 text-sm">{t("reports.alertRate")}</p>
                 <p className="text-3xl font-bold text-yellow-400 mt-1">
                   {dailyReport.totalEvents > 0
                     ? `${((dailyReport.totalAlerts / dailyReport.totalEvents) * 100).toFixed(0)}%`
@@ -225,7 +227,7 @@ export default function ReportsPage() {
             <div className="xl:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-6">
               <h3 className="text-sm font-semibold text-gray-300 mb-5 flex items-center gap-2">
                 <BarChart2 className="w-4 h-4 text-blue-400" />
-                {period === "daily" ? "Events by Type" : "Events Over Time"}
+                {period === "daily" ? t("reports.eventsByType") : t("reports.eventsOverTime")}
               </h3>
               <ResponsiveContainer width="100%" height={220}>
                 {period === "daily" ? (
@@ -266,8 +268,7 @@ export default function ReportsPage() {
                     data={
                       chartData as {
                         date: string;
-                        Events: number;
-                        Alerts: number;
+                        [key: string]: string | number;
                       }[]
                     }
                   >
@@ -300,12 +301,12 @@ export default function ReportsPage() {
                     />
                     <Legend />
                     <Bar
-                      dataKey="Events"
+                      dataKey={t("reports.chartEvents")}
                       fill="#2563eb"
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar
-                      dataKey="Alerts"
+                      dataKey={t("reports.chartAlerts")}
                       fill="#dc2626"
                       radius={[4, 4, 0, 0]}
                     />
@@ -316,7 +317,7 @@ export default function ReportsPage() {
 
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <h3 className="text-sm font-semibold text-gray-300 mb-5">
-                By Event Type
+                {t("reports.byEventType")}
               </h3>
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
@@ -352,7 +353,7 @@ export default function ReportsPage() {
                 </ResponsiveContainer>
               ) : (
                 <p className="text-gray-500 text-sm text-center py-12">
-                  No data
+                  {t("reports.noData")}
                 </p>
               )}
             </div>

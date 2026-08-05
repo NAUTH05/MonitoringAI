@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface HealthMetricProps {
   label: string;
@@ -70,6 +71,7 @@ function UsageBar({ value, label }: { value: string; label: string }) {
 }
 
 export default function HealthPage() {
+  const { t } = useTranslation();
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,7 +88,7 @@ export default function HealthPage() {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load health data",
+        err instanceof Error ? err.message : t("health.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -103,11 +105,11 @@ export default function HealthPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">System Health</h1>
+          <h1 className="text-2xl font-bold text-white">{t("health.title")}</h1>
           <p className="text-gray-400 text-sm mt-1">
             {lastUpdated
-              ? `Last updated: ${lastUpdated.toLocaleTimeString()}`
-              : "Loading..."}
+              ? t("health.lastUpdated", { time: lastUpdated.toLocaleTimeString() })
+              : t("common.loadingDots")}
           </p>
         </div>
         <button
@@ -115,7 +117,7 @@ export default function HealthPage() {
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2.5 rounded-lg transition text-sm border border-gray-700"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
+          {t("common.refresh")}
         </button>
       </div>
 
@@ -146,7 +148,7 @@ export default function HealthPage() {
                 <XCircle className="w-8 h-8 text-red-400" />
               )}
               <div>
-                <p className="text-sm text-gray-400">Server Status</p>
+                <p className="text-sm text-gray-400">{t("health.serverStatus")}</p>
                 <p
                   className={cn(
                     "text-xl font-bold",
@@ -173,7 +175,7 @@ export default function HealthPage() {
                 <XCircle className="w-8 h-8 text-red-400" />
               )}
               <div>
-                <p className="text-sm text-gray-400">Database Status</p>
+                <p className="text-sm text-gray-400">{t("health.databaseStatus")}</p>
                 <p
                   className={cn(
                     "text-xl font-bold",
@@ -190,29 +192,29 @@ export default function HealthPage() {
 
           {/* Usage bars */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <UsageBar value={health.server.cpuUsage} label="CPU Usage" />
-            <UsageBar value={health.server.memUsage} label="Memory Usage" />
+            <UsageBar value={health.server.cpuUsage} label={t("health.cpuUsage")} />
+            <UsageBar value={health.server.memUsage} label={t("health.memUsage")} />
           </div>
 
           {/* Metrics grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <HealthMetric
-              label="Uptime"
+              label={t("health.uptime")}
               value={health.server.uptime}
               icon={<Clock className="w-5 h-5" />}
             />
             <HealthMetric
-              label="Total Memory"
+              label={t("health.totalMemory")}
               value={health.server.totalMem}
               icon={<HardDrive className="w-5 h-5" />}
             />
             <HealthMetric
-              label="Free Memory"
+              label={t("health.freeMemory")}
               value={health.server.freeMem}
               icon={<HardDrive className="w-5 h-5" />}
             />
             <HealthMetric
-              label="Node.js"
+              label={t("health.nodejs")}
               value={health.server.nodeVersion}
               icon={<Server className="w-5 h-5" />}
             />
@@ -220,8 +222,10 @@ export default function HealthPage() {
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <p className="text-xs text-gray-500">
-              Last checked: {new Date(health.timestamp).toLocaleString()} ·
-              Platform: {health.server.platform}
+              {t("health.lastChecked", {
+                ts: new Date(health.timestamp).toLocaleString(),
+                platform: health.server.platform,
+              })}
             </p>
           </div>
         </>

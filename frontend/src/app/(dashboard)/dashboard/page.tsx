@@ -7,8 +7,10 @@ import { api } from "@/lib/api";
 import { ApiResponse, DashboardStats } from "@/types";
 import { AlertTriangle, Camera, TrendingUp, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -19,7 +21,7 @@ export default function DashboardPage() {
         await api.get<ApiResponse<DashboardStats>>("/reports/dashboard");
       if (res.success) setStats(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      setError(err instanceof Error ? err.message : t("dashboard.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -48,7 +50,7 @@ export default function DashboardPage() {
           onClick={fetchStats}
           className="text-sm text-blue-400 hover:underline"
         >
-          Retry
+          {t("common.retry")}
         </button>
       </div>
     );
@@ -57,48 +59,48 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-white">{t("dashboard.title")}</h1>
         <p className="text-gray-400 text-sm mt-1">
-          Security monitoring overview
+          {t("dashboard.subtitle")}
         </p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatsCard
-          title="Total Cameras"
+          title={t("dashboard.totalCameras")}
           value={stats?.totalCameras ?? 0}
           Icon={Camera}
           color="blue"
-          subtitle="All registered cameras"
+          subtitle={t("dashboard.allRegistered")}
         />
         <StatsCard
-          title="Online"
+          title={t("dashboard.online")}
           value={stats?.onlineCameras ?? 0}
           Icon={Wifi}
           color="green"
-          subtitle="Currently active"
+          subtitle={t("dashboard.currentlyActive")}
         />
         <StatsCard
-          title="Offline"
+          title={t("dashboard.offline")}
           value={stats?.offlineCameras ?? 0}
           Icon={WifiOff}
           color="gray"
-          subtitle="Not connected"
+          subtitle={t("dashboard.notConnected")}
         />
         <StatsCard
-          title="Today's Alerts"
+          title={t("dashboard.todayAlerts")}
           value={stats?.todayAlerts ?? 0}
           Icon={AlertTriangle}
           color="red"
-          subtitle="High confidence events"
+          subtitle={t("dashboard.highConfidence")}
         />
         <StatsCard
-          title="Week Alerts"
+          title={t("dashboard.weekAlerts")}
           value={stats?.weekAlerts ?? 0}
           Icon={TrendingUp}
           color="yellow"
-          subtitle="Last 7 days"
+          subtitle={t("dashboard.last7Days")}
         />
       </div>
 

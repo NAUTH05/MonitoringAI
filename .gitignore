@@ -43,3 +43,4 @@ start-manual.ps1
 /package.json
 /package-lock.json
 opencode.json
+*.sql

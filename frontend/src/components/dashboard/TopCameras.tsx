@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslation } from "react-i18next";
+
 interface TopCamera {
   cameraId: string;
   cameraName: string;
@@ -5,16 +9,17 @@ interface TopCamera {
 }
 
 export function TopCameras({ data }: { data: TopCamera[] }) {
+  const { t } = useTranslation();
   const max = Math.max(...data.map((d) => d.count), 1);
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
       <h3 className="text-sm font-semibold text-gray-300 mb-5">
-        Top Cameras by Alerts
+        {t("dashboard.topCameras")}
       </h3>
       {data.length === 0 ? (
         <p className="text-gray-500 text-sm text-center py-6">
-          No data available
+          {t("dashboard.noData")}
         </p>
       ) : (
         <div className="space-y-4">
