@@ -7,6 +7,7 @@ module.exports = {
       name: 'monitoring-backend',
       cwd: './backend',
       script: 'dist/index.js',        // cần chạy `npm run build` trước
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       env: {
         NODE_ENV: 'production',
         PORT: '4000',
@@ -20,6 +21,7 @@ module.exports = {
       script: 'npm',
       args: 'start',                  // next start; cần `npm run build` trước
       interpreter: 'none',            // chạy npm trực tiếp (Linux)
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       env: {
         NODE_ENV: 'production',
         PORT: '3000',

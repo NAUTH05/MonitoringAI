@@ -3,7 +3,20 @@
 import { Go2RtcPlayer, PlayerState } from "@/components/cameras/Go2RtcPlayer";
 import { api } from "@/lib/api";
 import { ApiResponse, Camera, CameraModule } from "@/types";
-import { Camera as CameraIcon, Check, Image as ImageIcon, Move, RefreshCw, RotateCcw, Trash2, Video, X } from "lucide-react";
+import {
+  Camera as CameraIcon,
+  Check,
+  Code,
+  Copy,
+  Eye,
+  Image as ImageIcon,
+  Move,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  Video,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Point {
@@ -56,12 +69,16 @@ export function RoiDrawerModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // View mode: 'live' or 'snapshot'
+  // View mode & snapshot state
   const [viewMode, setViewMode] = useState<"live" | "snapshot">("live");
   const [playerState, setPlayerState] = useState<PlayerState>("connecting");
   const [snapshotKey, setSnapshotKey] = useState<number>(Date.now());
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState(false);
+
+  // Coordinates Inspection & Copy state
+  const [showViewAllModal, setShowViewAllModal] = useState(false);
+  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
 
   // Resolve proper go2rtc stream name
   const rawUrl = camera.rtspUrl || camera.subRtspUrl;
@@ -79,6 +96,8 @@ export function RoiDrawerModal({
       setError(null);
       setViewMode("live");
       setSnapshotKey(Date.now());
+      setShowViewAllModal(false);
+      setCopiedFormat(null);
     }
   }, [isOpen, cameraModule]);
 
@@ -155,6 +174,12 @@ export function RoiDrawerModal({
     setPoints([]);
   };
 
+  const copyToClipboard = (text: string, formatName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedFormat(formatName);
+    setTimeout(() => setCopiedFormat(null), 2000);
+  };
+
   const handleSave = async () => {
     if (points.length > 0 && points.length < 3) {
       setError("Đa giác vùng cấm phải có ít nhất 3 điểm.");
@@ -190,11 +215,15 @@ export function RoiDrawerModal({
 
   if (!isOpen) return null;
 
-  const polygonPointsStr = points.map((p) => `${p.x * 100}%,${p.y * 100}%`).join(" ");
+  // Use 1000x1000 viewBox for standard SVG numeric points compliance (fixes console warning)
+  const polygonPointsStr = points.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ");
+
+  const jsonFormatStr = JSON.stringify(points, null, 2);
+  const pythonFormatStr = `np.array([${points.map((p) => `[${p.x}, ${p.y}]`).join(", ")}])`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
           <div>
@@ -345,8 +374,10 @@ export function RoiDrawerModal({
               </div>
             )}
 
-            {/* SVG Drawing Layer */}
+            {/* SVG Drawing Layer with standard numeric viewBox 0 0 1000 1000 */}
             <svg
+              viewBox="0 0 1000 1000"
+              preserveAspectRatio="none"
               className="absolute inset-0 w-full h-full z-10 touch-none"
               onClick={handleSvgClick}
               onMouseMove={handleMouseMove}
@@ -358,8 +389,8 @@ export function RoiDrawerModal({
                   points={polygonPointsStr}
                   fill="rgba(239, 68, 68, 0.25)"
                   stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeDasharray="4 4"
+                  strokeWidth="3"
+                  strokeDasharray="6 6"
                 />
               )}
 
@@ -369,8 +400,8 @@ export function RoiDrawerModal({
                   points={polygonPointsStr}
                   fill="none"
                   stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeDasharray="4 4"
+                  strokeWidth="3"
+                  strokeDasharray="6 6"
                 />
               )}
 
@@ -379,29 +410,29 @@ export function RoiDrawerModal({
                 <g key={index} className="cursor-pointer">
                   {/* Outer glow ring */}
                   <circle
-                    cx={`${p.x * 100}%`}
-                    cy={`${p.y * 100}%`}
-                    r={activeDragIndex === index ? "12" : "8"}
+                    cx={p.x * 1000}
+                    cy={p.y * 1000}
+                    r={activeDragIndex === index ? 16 : 12}
                     className="fill-red-500/30 stroke-red-400 stroke-2 transition-all duration-75"
                   />
                   {/* Center Dot */}
                   <circle
-                    cx={`${p.x * 100}%`}
-                    cy={`${p.y * 100}%`}
-                    r="4"
+                    cx={p.x * 1000}
+                    cy={p.y * 1000}
+                    r={5}
                     className="fill-white"
                     onMouseDown={(e) => handleMouseDownPoint(index, e)}
                   />
                   {/* Point Index Tag */}
                   <text
-                    x={`${p.x * 100}%`}
-                    y={`${p.y * 100}%`}
-                    dx="12"
-                    dy="4"
+                    x={p.x * 1000}
+                    y={p.y * 1000}
+                    dx={16}
+                    dy={5}
                     fill="#ffffff"
-                    fontSize="11"
+                    fontSize="16"
                     fontWeight="bold"
-                    className="pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                    className="pointer-events-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] select-none"
                   >
                     #{index + 1}
                   </text>
@@ -411,7 +442,7 @@ export function RoiDrawerModal({
           </div>
 
           {/* Coordinate Preview & Quick Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-gray-950/40 p-2.5 border border-gray-800 rounded-lg">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -431,10 +462,45 @@ export function RoiDrawerModal({
                 <Trash2 className="w-3.5 h-3.5" />
                 Xóa tất cả
               </button>
+
+              <div className="h-4 w-px bg-gray-800 my-auto mx-1" />
+
+              {/* Copy Points Button */}
+              <button
+                type="button"
+                onClick={() => copyToClipboard(jsonFormatStr, "json")}
+                disabled={points.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-800/40 disabled:opacity-50 rounded-lg transition"
+                title="Sao chép danh sách tọa độ (JSON)"
+              >
+                {copiedFormat === "json" ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-400 font-medium">Đã chép!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy Tọa độ
+                  </>
+                )}
+              </button>
+
+              {/* View All Modal Trigger */}
+              <button
+                type="button"
+                onClick={() => setShowViewAllModal(true)}
+                disabled={points.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-200 rounded-lg transition"
+                title="Xem toàn bộ mảng tọa độ chi tiết"
+              >
+                <Eye className="w-3.5 h-3.5 text-purple-400" />
+                Xem toàn bộ ({points.length})
+              </button>
             </div>
 
-            {/* List of points summary */}
-            <div className="text-gray-400 truncate max-w-md">
+            {/* Inline List of points summary */}
+            <div className="text-gray-400 truncate max-w-sm">
               {points.length === 0 ? (
                 <span>Chưa vẽ điểm nào.</span>
               ) : (
@@ -470,6 +536,103 @@ export function RoiDrawerModal({
           </button>
         </div>
       </div>
+
+      {/* Sub Modal: View & Copy All Coordinates */}
+      {showViewAllModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fade-in">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <Code className="w-5 h-5 text-purple-400" />
+                <span>Danh sách Tọa độ Vùng Cấm (ROI Points)</span>
+              </h3>
+              <button
+                onClick={() => setShowViewAllModal(false)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs overflow-y-auto max-h-[70vh]">
+              {/* Formatted Tuple list */}
+              <div>
+                <label className="text-gray-400 font-medium block mb-1.5">
+                  Danh sách {points.length} đỉnh đa giác (Thứ tự vẽ):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-950 p-3 border border-gray-800 rounded-lg font-mono">
+                  {points.map((p, i) => (
+                    <div key={i} className="flex items-center gap-1.5 bg-gray-900/80 px-2.5 py-1.5 rounded border border-gray-800">
+                      <span className="text-purple-400 font-bold">#{i + 1}:</span>
+                      <span className="text-gray-200">({p.x}, {p.y})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* JSON Format */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-gray-400 font-medium">Định dạng JSON (Web / API):</label>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(jsonFormatStr, "modal_json")}
+                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    {copiedFormat === "modal_json" ? (
+                      <span className="text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Đã chép
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Copy className="w-3 h-3" /> Copy JSON
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <pre className="bg-gray-950 p-3 rounded-lg border border-gray-800 font-mono text-[11px] text-emerald-400 overflow-x-auto">
+                  {jsonFormatStr}
+                </pre>
+              </div>
+
+              {/* Python NumPy Format */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-gray-400 font-medium">Định dạng Python OpenCV (NumPy Array):</label>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(pythonFormatStr, "modal_python")}
+                    className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    {copiedFormat === "modal_python" ? (
+                      <span className="text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Đã chép
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Copy className="w-3 h-3" /> Copy Python
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <pre className="bg-gray-950 p-3 rounded-lg border border-gray-800 font-mono text-[11px] text-amber-300 overflow-x-auto">
+                  {pythonFormatStr}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end px-6 py-4 border-t border-gray-800 bg-gray-900/50">
+              <button
+                type="button"
+                onClick={() => setShowViewAllModal(false)}
+                className="px-4 py-2 text-xs font-medium bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
