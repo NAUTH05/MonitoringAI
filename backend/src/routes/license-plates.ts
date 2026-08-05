@@ -205,8 +205,8 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
       confidence: e.confidence,
       imagePath: e.image_path,
       thumbnailPath: e.thumbnail_path,
-      imageUrl: e.image_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.image_path}` : `/aicam-media/${e.image_path}`) : null,
-      thumbnailUrl: e.thumbnail_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.thumbnail_path}` : `/aicam-media/${e.thumbnail_path}`) : null,
+      imageUrl: e.image_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.image_path}` : `/api/aicam-media/${e.image_path}`) : null,
+      thumbnailUrl: e.thumbnail_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.thumbnail_path}` : `/api/aicam-media/${e.thumbnail_path}`) : null,
       createdAt: e.created_at,
     }));
 

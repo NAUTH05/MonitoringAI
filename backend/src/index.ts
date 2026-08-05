@@ -78,6 +78,7 @@ app.use('/evidence', express.static(evidenceDir));
 // Serve aicam event media (license plate snapshots) from MinIO storage directory or local evidence folder
 const defaultMinioDir = '/var/lib/minio/events';
 const aicamEventsDir = process.env.AICAM_EVENTS_DIR || (fs.existsSync(defaultMinioDir) ? defaultMinioDir : evidenceDir);
+app.use('/api/aicam-media', express.static(aicamEventsDir));
 app.use('/aicam-media', express.static(aicamEventsDir));
 
 // API docs (Swagger UI)

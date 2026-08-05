@@ -72,11 +72,13 @@ export function LicensePlatesDashboard() {
   const [exporting, setExporting] = useState(false);
 
   const getMediaUrl = (path: string | null, directUrl?: string | null) => {
-    if (directUrl) return directUrl;
-    if (!path) return null;
-    if (path.startsWith("http://") || path.startsWith("https://")) return path;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
-    return `${baseUrl}/aicam-media/${path}`;
+    let url = directUrl || (path ? `/api/aicam-media/${path}` : null);
+    if (!url) return null;
+
+    if (typeof window !== "undefined" && (url.includes("localhost") || url.includes("127.0.0.1"))) {
+      url = url.replace(/localhost|127\.0\.0\.1/g, window.location.hostname);
+    }
+    return url;
   };
 
   useEffect(() => {
