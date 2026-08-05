@@ -1,9 +1,9 @@
 "use client";
 
-import { Go2RtcPlayer } from "@/components/cameras/Go2RtcPlayer";
+import { Go2RtcPlayer, PlayerState } from "@/components/cameras/Go2RtcPlayer";
 import { api } from "@/lib/api";
 import { ApiResponse, Camera, CameraModule } from "@/types";
-import { Check, Move, RotateCcw, Trash2, X } from "lucide-react";
+import { Camera as CameraIcon, Check, Image as ImageIcon, Move, RefreshCw, RotateCcw, Trash2, Video, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Point {
@@ -19,6 +19,30 @@ interface RoiDrawerModalProps {
   onSaved: () => void;
 }
 
+function deriveStreamName(url: string | undefined | null): string | null {
+  if (!url) return null;
+  const u = url.trim();
+  const m = u.match(/[?&]src=([^&]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  if (u.startsWith("rtsp://")) return null;
+  if (/^[\w.-]+$/.test(u)) return u;
+  return null;
+}
+
+function getGo2RtcFrameUrl(streamName: string, key: number): string {
+  const env = process.env.NEXT_PUBLIC_GO2RTC_URL;
+  let base: string;
+  if (env) {
+    base = env.replace(/\/$/, "");
+  } else if (typeof window !== "undefined") {
+    const proto = window.location.protocol;
+    base = `${proto}//${window.location.hostname}:1984`;
+  } else {
+    base = "http://localhost:1984";
+  }
+  return `${base}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&t=${key}`;
+}
+
 export function RoiDrawerModal({
   camera,
   cameraModule,
@@ -32,6 +56,17 @@ export function RoiDrawerModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // View mode: 'live' or 'snapshot'
+  const [viewMode, setViewMode] = useState<"live" | "snapshot">("live");
+  const [playerState, setPlayerState] = useState<PlayerState>("connecting");
+  const [snapshotKey, setSnapshotKey] = useState<number>(Date.now());
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState(false);
+
+  // Resolve proper go2rtc stream name
+  const rawUrl = camera.rtspUrl || camera.subRtspUrl;
+  const streamName = deriveStreamName(rawUrl) || camera.name || camera.id;
+
   // Initialize points from module config
   useEffect(() => {
     if (isOpen) {
@@ -42,8 +77,16 @@ export function RoiDrawerModal({
         setPoints([]);
       }
       setError(null);
+      setViewMode("live");
+      setSnapshotKey(Date.now());
     }
   }, [isOpen, cameraModule]);
+
+  const refreshSnapshot = () => {
+    setSnapshotLoading(true);
+    setSnapshotError(false);
+    setSnapshotKey(Date.now());
+  };
 
   // Convert mouse event coordinates to normalized [0, 1]
   const getNormalizedPoint = useCallback((e: React.MouseEvent<SVGSVGElement>): Point | null => {
@@ -54,7 +97,6 @@ export function RoiDrawerModal({
     const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
 
-    // Round to 4 decimal places for precision
     return {
       x: Math.round(x * 10000) / 10000,
       y: Math.round(y * 10000) / 10000,
@@ -70,7 +112,6 @@ export function RoiDrawerModal({
     const newPoint = getNormalizedPoint(e);
     if (!newPoint) return;
 
-    // Check if clicked close to an existing point to avoid adding double point
     const threshold = 0.03;
     const existingIndex = points.findIndex(
       (p) => Math.abs(p.x - newPoint.x) < threshold && Math.abs(p.y - newPoint.y) < threshold
@@ -104,12 +145,6 @@ export function RoiDrawerModal({
     if (activeDragIndex !== null) {
       setActiveDragIndex(null);
     }
-  };
-
-  const handleRemovePoint = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPoints((prev) => prev.filter((_, i) => i !== index));
-    if (activeDragIndex === index) setActiveDragIndex(null);
   };
 
   const handleUndo = () => {
@@ -155,7 +190,6 @@ export function RoiDrawerModal({
 
   if (!isOpen) return null;
 
-  // Build SVG polygon points attribute string "x1%,y1% x2%,y2% ..."
   const polygonPointsStr = points.map((p) => `${p.x * 100}%,${p.y * 100}%`).join(" ");
 
   return (
@@ -171,7 +205,7 @@ export function RoiDrawerModal({
               </span>
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Camera: <span className="text-gray-200 font-medium">{camera.name}</span> ({camera.location})
+              Camera: <span className="text-gray-200 font-medium">{camera.name}</span> ({streamName})
             </p>
           </div>
           <button
@@ -184,17 +218,62 @@ export function RoiDrawerModal({
 
         {/* Content Body */}
         <div className="p-6 flex-1 overflow-y-auto space-y-4">
-          {/* Instructions */}
-          <div className="bg-blue-950/40 border border-blue-800/40 rounded-lg p-3 text-xs text-blue-300 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          {/* Controls Bar & Mode Toggle */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-950/60 border border-gray-800 rounded-lg p-2.5">
+            <div className="flex items-center gap-2 text-xs text-blue-300">
               <Move className="w-4 h-4 text-blue-400 shrink-0" />
               <span>
-                Click chuột lên khung video để thêm các đỉnh đa giác. Kéo thả vòng tròn đỏ để điều chỉnh vị trí đỉnh.
+                Click chuột lên hình để tạo góc vùng cấm. Kéo các điểm để di chuyển.
               </span>
             </div>
-            <span className="font-mono bg-blue-900/60 px-2 py-0.5 rounded text-blue-200 font-medium">
-              {points.length} điểm
-            </span>
+
+            <div className="flex items-center gap-2">
+              {/* Switch View Mode */}
+              <div className="flex items-center p-0.5 bg-gray-800 border border-gray-700 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("live")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${
+                    viewMode === "live"
+                      ? "bg-blue-600 text-white font-medium shadow"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  <Video className="w-3.5 h-3.5" />
+                  Stream Trực Tiếp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("snapshot");
+                    refreshSnapshot();
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${
+                    viewMode === "snapshot"
+                      ? "bg-blue-600 text-white font-medium shadow"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  Ảnh Chụp (Snapshot)
+                </button>
+              </div>
+
+              {viewMode === "snapshot" && (
+                <button
+                  type="button"
+                  onClick={refreshSnapshot}
+                  className="p-1.5 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 rounded-lg transition"
+                  title="Chụp lại khung hình mới"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${snapshotLoading ? "animate-spin" : ""}`} />
+                </button>
+              )}
+
+              <span className="font-mono bg-blue-950/80 border border-blue-800/40 text-blue-300 px-2.5 py-1 rounded-lg text-xs font-semibold">
+                {points.length} điểm
+              </span>
+            </div>
           </div>
 
           {error && (
@@ -208,8 +287,63 @@ export function RoiDrawerModal({
             ref={containerRef}
             className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border border-gray-800 select-none cursor-crosshair group"
           >
-            {/* Live Video Player */}
-            <Go2RtcPlayer streamName={camera.id} active={isOpen} className="w-full h-full object-contain" />
+            {/* View Mode: Live Stream */}
+            {viewMode === "live" && (
+              <>
+                <Go2RtcPlayer
+                  streamName={streamName}
+                  active={isOpen}
+                  onState={setPlayerState}
+                  className="w-full h-full object-contain bg-black"
+                />
+                {playerState !== "playing" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs gap-2 pointer-events-none z-0">
+                    <span className="inline-block animate-spin border-2 border-blue-500 border-t-transparent rounded-full w-6 h-6" />
+                    <span className="text-xs font-mono text-gray-300">
+                      {playerState === "error" ? "Đang kết nối lại luồng video..." : "Đang tải luồng camera..."}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("snapshot")}
+                      className="mt-2 pointer-events-auto px-3 py-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-xs text-blue-400 rounded-lg transition"
+                    >
+                      Chuyển sang xem Ảnh chụp (Snapshot)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* View Mode: Snapshot Frame */}
+            {viewMode === "snapshot" && (
+              <div className="relative w-full h-full bg-black flex items-center justify-center">
+                {!snapshotError ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={getGo2RtcFrameUrl(streamName, snapshotKey)}
+                    alt="Camera Snapshot"
+                    onLoad={() => setSnapshotLoading(false)}
+                    onError={() => {
+                      setSnapshotLoading(false);
+                      setSnapshotError(true);
+                    }}
+                    className="w-full h-full object-contain pointer-events-none"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 text-gray-400 p-4 text-center">
+                    <CameraIcon className="w-8 h-8 text-gray-600" />
+                    <span className="text-xs">Không thể tải khung hình snapshot từ camera.</span>
+                    <button
+                      type="button"
+                      onClick={refreshSnapshot}
+                      className="px-3 py-1 bg-gray-800 border border-gray-700 text-xs text-white rounded-lg transition hover:bg-gray-700"
+                    >
+                      Thử lại
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* SVG Drawing Layer */}
             <svg
