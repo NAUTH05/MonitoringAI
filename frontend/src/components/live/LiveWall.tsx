@@ -206,54 +206,7 @@ export function LiveWall() {
         if (existing && existing.width === res.width && existing.height === res.height) {
           return prev;
         }
-        const nextResolutions = { ...prev, [camId]: res };
-
-        // Automatically bind tile height & min size based on native stream resolution & aspect ratio!
-        setLayouts((curLayouts) => {
-          if (!curLayouts) return curLayouts;
-          const next = {} as Layouts;
-          (Object.keys(COLS) as BP[]).forEach((bp) => {
-            const items = curLayouts[bp] ?? [];
-            next[bp] = items.map((item) => {
-              if (item.i !== camId) return item;
-
-              const ratio = res.aspectRatio;
-              let targetH = item.h;
-              let minW = 3;
-              let minH = 3;
-
-              if (ratio >= 1.5) {
-                // 16:9 widescreen HD (e.g. 1920x1080, 1280x720)
-                // Account for top header bar (35px) + video aspect ratio
-                targetH = Math.max(4, Math.round(item.w * 1.15));
-                minW = 3;
-                minH = 4;
-              } else if (ratio >= 1.1) {
-                // 4:3 standard (e.g. 1280x960, 640x480)
-                targetH = Math.max(4, Math.round(item.w * 1.35));
-                minW = 3;
-                minH = 5;
-              } else {
-                // Vertical / Corridor 9:16 (e.g. 1080x1920)
-                targetH = Math.max(6, Math.round(item.w * 2.2));
-                minW = 2;
-                minH = 6;
-              }
-
-              return {
-                ...item,
-                h: targetH,
-                minW,
-                minH,
-              };
-            });
-          });
-          savedLayoutRef.current = next;
-          liveCache.setLayouts(next);
-          return next;
-        });
-
-        return nextResolutions;
+        return { ...prev, [camId]: res };
       });
     },
     [],

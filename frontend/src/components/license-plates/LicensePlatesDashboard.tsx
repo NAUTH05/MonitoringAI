@@ -37,6 +37,8 @@ export interface LicensePlateEvent {
   confidence: number;
   imagePath: string | null;
   thumbnailPath: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
   createdAt: string;
 }
 
@@ -69,8 +71,10 @@ export function LicensePlatesDashboard() {
   const [endDate, setEndDate] = useState("");
   const [exporting, setExporting] = useState(false);
 
-  const getMediaUrl = (path: string | null) => {
+  const getMediaUrl = (path: string | null, directUrl?: string | null) => {
+    if (directUrl) return directUrl;
     if (!path) return null;
+    if (path.startsWith("http://") || path.startsWith("https://")) return path;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '') || 'http://localhost:4000';
     return `${baseUrl}/aicam-media/${path}`;
   };
@@ -455,7 +459,7 @@ export function LicensePlatesDashboard() {
                           className="w-16 h-10 bg-gray-950 border border-gray-800 rounded-lg overflow-hidden cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-500/30 transition relative group"
                         >
                           <img
-                            src={getMediaUrl(event.thumbnailPath || event.imagePath)!}
+                            src={getMediaUrl(event.thumbnailPath || event.imagePath, event.thumbnailUrl || event.imageUrl)!}
                             alt={event.plateText || "Ảnh biển số"}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                             onError={(e) => {
@@ -613,7 +617,7 @@ export function LicensePlatesDashboard() {
                       {copied ? "Đã chép" : "Chép path"}
                     </button>
                     <a
-                      href={getMediaUrl(selectedEvent.imagePath)!}
+                      href={getMediaUrl(selectedEvent.imagePath, selectedEvent.imageUrl)!}
                       target="_blank"
                       rel="noreferrer"
                       title="Mở ảnh trong tab mới"
@@ -633,7 +637,7 @@ export function LicensePlatesDashboard() {
                     {!imageError ? (
                       <>
                         <img
-                          src={getMediaUrl(selectedEvent.imagePath)!}
+                          src={getMediaUrl(selectedEvent.imagePath, selectedEvent.imageUrl)!}
                           alt={`Bằng chứng biển số ${selectedEvent.plateText}`}
                           className="w-full h-full object-contain cursor-zoom-in transition-transform duration-300 group-hover:scale-[1.01]"
                           onClick={() => setIsZoomed(true)}
@@ -736,7 +740,7 @@ export function LicensePlatesDashboard() {
             <X className="w-6 h-6" />
           </button>
           <img
-            src={getMediaUrl(selectedEvent.imagePath)!}
+            src={getMediaUrl(selectedEvent.imagePath, selectedEvent.imageUrl)!}
             alt={`Bằng chứng biển số ${selectedEvent.plateText}`}
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl cursor-default"
