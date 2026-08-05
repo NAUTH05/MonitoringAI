@@ -123,6 +123,9 @@ export function RoiDrawerModal({
   }, []);
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // If view all modal is open, ignore clicks
+    if (showViewAllModal) return;
+
     if (activeDragIndex !== null) {
       setActiveDragIndex(null);
       return;
@@ -144,12 +147,13 @@ export function RoiDrawerModal({
   };
 
   const handleMouseDownPoint = (index: number, e: React.MouseEvent) => {
+    if (showViewAllModal) return;
     e.stopPropagation();
     setActiveDragIndex(index);
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (activeDragIndex === null) return;
+    if (showViewAllModal || activeDragIndex === null) return;
     const point = getNormalizedPoint(e);
     if (!point) return;
 
@@ -174,10 +178,28 @@ export function RoiDrawerModal({
     setPoints([]);
   };
 
+  // Robust Clipboard Copy function working on both HTTPS and HTTP (IP address)
   const copyToClipboard = (text: string, formatName: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedFormat(formatName);
-    setTimeout(() => setCopiedFormat(null), 2000);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-999999px";
+        textarea.style.top = "-999999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedFormat(formatName);
+      setTimeout(() => setCopiedFormat(null), 2000);
+    } catch {
+      setError("Không thể tự động sao chép vào bộ nhớ tạm.");
+    }
   };
 
   const handleSave = async () => {
@@ -223,7 +245,7 @@ export function RoiDrawerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden relative">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
           <div>
@@ -537,10 +559,17 @@ export function RoiDrawerModal({
         </div>
       </div>
 
-      {/* Sub Modal: View & Copy All Coordinates */}
+      {/* Sub Modal: View & Copy All Coordinates (High z-index z-[100] & stopPropagation) */}
       {showViewAllModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fade-in"
+          style={{ zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden relative z-[101]"
+          >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/50">
               <h3 className="text-base font-semibold text-white flex items-center gap-2">
                 <Code className="w-5 h-5 text-purple-400" />
@@ -580,8 +609,8 @@ export function RoiDrawerModal({
                     className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
                   >
                     {copiedFormat === "modal_json" ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Đã chép
+                      <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                        <Check className="w-3.5 h-3.5" /> Đã chép vào bộ nhớ!
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
@@ -605,8 +634,8 @@ export function RoiDrawerModal({
                     className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium"
                   >
                     {copiedFormat === "modal_python" ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Đã chép
+                      <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                        <Check className="w-3.5 h-3.5" /> Đã chép vào bộ nhớ!
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
