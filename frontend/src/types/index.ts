@@ -33,6 +33,10 @@ export interface CameraModule {
   cameraId: string;
   moduleId: string;
   isEnabled: boolean;
+  config?: {
+    roiPolygon?: Array<{ x: number; y: number }>;
+    [key: string]: unknown;
+  } | null;
   module: AiModule;
   createdAt: string;
 }

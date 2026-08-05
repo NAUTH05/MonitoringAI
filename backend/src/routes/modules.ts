@@ -86,4 +86,30 @@ router.patch('/camera/:cameraId/:moduleId/toggle', authenticate, authorize('Admi
   }
 });
 
+// PATCH /api/modules/camera/:cameraId/:moduleId/config
+router.patch('/camera/:cameraId/:moduleId/config', authenticate, authorize('Admin', 'Manager'), async (req: Request, res: Response) => {
+  try {
+    const { config } = req.body;
+
+    const existing = await prisma.cameraModule.findUnique({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+    });
+
+    if (!existing) {
+      res.status(404).json({ success: false, message: 'Camera module assignment not found' });
+      return;
+    }
+
+    const updated = await prisma.cameraModule.update({
+      where: { cameraId_moduleId: { cameraId: req.params.cameraId, moduleId: req.params.moduleId } },
+      data: { config: config ?? null },
+      include: { module: true },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to update module config' });
+  }
+});
+
 export default router;

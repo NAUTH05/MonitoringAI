@@ -74,6 +74,7 @@ model CameraModule {
   cameraId  String   @map("camera_id")
   moduleId  String   @map("module_id")
   isEnabled Boolean  @default(true) @map("is_enabled")
+  config    Json?
   camera    Camera   @relation(fields: [cameraId], references: [id])
   module    AiModule @relation(fields: [moduleId], references: [id])
   createdAt DateTime @default(now()) @map("created_at")

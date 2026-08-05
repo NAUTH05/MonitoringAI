@@ -1,5 +1,6 @@
 "use client";
 
+import { RoiDrawerModal } from "@/components/cameras/RoiDrawerModal";
 import { api } from "@/lib/api";
 import { AiModule, ApiResponse, Camera, CameraModule, PaginatedResponse } from "@/types";
 import {
@@ -9,6 +10,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Shapes,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -23,6 +25,10 @@ export default function ModulesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [activeRoiModal, setActiveRoiModal] = useState<{
+    camera: Camera;
+    cameraModule: CameraModule;
+  } | null>(null);
 
   const fetchModules = useCallback(async () => {
     const res = await api.get<ApiResponse<AiModule[]>>("/modules");
@@ -87,6 +93,8 @@ export default function ModulesPage() {
       setBusy(false);
     }
   };
+
+  const selectedCamera = cameras.find((c) => c.id === selectedCameraId);
 
   const filteredModules = modules.filter(
     (m) =>
@@ -189,6 +197,10 @@ export default function ModulesPage() {
               modules.map((m) => {
                 const cm = assignedMap.get(m.id);
                 const isAssigned = !!cm;
+                const roiCount = Array.isArray(cm?.config?.roiPolygon)
+                  ? cm.config.roiPolygon.length
+                  : 0;
+
                 return (
                   <div key={m.id} className="p-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -206,10 +218,31 @@ export default function ModulesPage() {
                           </span>
                         )}
                       </div>
+                      {isAssigned && (
+                        <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-2">
+                          <span>ROI Vùng cấm:</span>
+                          <span className={roiCount > 0 ? "text-emerald-400 font-medium" : "text-gray-500"}>
+                            {roiCount > 0 ? `${roiCount} điểm đã vẽ` : "Chưa cấu hình"}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {isAssigned ? (
                         <>
+                          <button
+                            disabled={busy || !selectedCamera}
+                            onClick={() => {
+                              if (selectedCamera) {
+                                setActiveRoiModal({ camera: selectedCamera, cameraModule: cm });
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-xs font-medium transition disabled:opacity-40"
+                            title="Vẽ Vùng Cấm ROI"
+                          >
+                            <Shapes className="w-3.5 h-3.5 text-purple-400" />
+                            Vẽ Vùng Cấm
+                          </button>
                           <button
                             disabled={busy}
                             onClick={() => handleToggle(m.id)}
@@ -250,6 +283,18 @@ export default function ModulesPage() {
           </div>
         </div>
       </div>
+
+      {/* ROI Drawing Modal */}
+      {activeRoiModal && (
+        <RoiDrawerModal
+          camera={activeRoiModal.camera}
+          cameraModule={activeRoiModal.cameraModule}
+          isOpen={!!activeRoiModal}
+          onClose={() => setActiveRoiModal(null)}
+          onSaved={() => fetchAssigned(selectedCameraId)}
+        />
+      )}
     </div>
   );
 }
+
