@@ -128,6 +128,47 @@ export default function ModulesPage() {
         </button>
       </div>
 
+      {/* AI Module Special Features Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card 1: Vehicle Stats & Filter */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Đếm & Lọc số lượng xe</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">VEHICLE</span>
+          </div>
+          <p className="text-sm font-bold text-white">Thống kê đếm xe theo thời gian thực</p>
+          <div className="flex items-center gap-2 text-xs text-gray-400 pt-1">
+            <span className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700">Ô tô</span>
+            <span className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700">Xe máy</span>
+            <span className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700">Xe tải</span>
+            <span className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700">Bus</span>
+          </div>
+        </div>
+
+        {/* Card 2: Flood Detection */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Phát hiện ngập nước</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">FLOOD</span>
+          </div>
+          <p className="text-sm font-bold text-white">Đo mực nước & Cảnh báo ngập lụt</p>
+          <p className="text-xs text-gray-400 pt-1">Nhận diện vùng nước dâng, ngập đường và cảnh báo tự động</p>
+        </div>
+
+        {/* Card 3: Traffic Violation Detection */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider">Phát hiện xe vi phạm</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">VIOLATION</span>
+          </div>
+          <p className="text-sm font-bold text-white">Nhận diện hành vi vi phạm giao thông</p>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 pt-1">
+            <span className="px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-900/50">Vượt đèn đỏ</span>
+            <span className="px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-900/50">Ngược chiều</span>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Modules catalog */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">

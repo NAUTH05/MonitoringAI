@@ -92,6 +92,8 @@ enum EventType {
   PPE
   FACE
   VEHICLE
+  FLOOD
+  TRAFFIC_VIOLATION
 }
 
 enum AlertStatus {

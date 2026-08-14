@@ -11,8 +11,8 @@ import {
   getEventTypeColor,
 } from "@/lib/utils";
 import { Event, EventType, PaginatedResponse } from "@/types";
-import { Eye, Filter, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Activity, AlertTriangle, CheckCircle2, Eye, Filter, RefreshCw, ShieldAlert, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 const EVENT_TYPES: EventType[] = [
@@ -22,6 +22,8 @@ const EVENT_TYPES: EventType[] = [
   "PPE",
   "FACE",
   "VEHICLE",
+  "FLOOD",
+  "TRAFFIC_VIOLATION",
 ];
 
 export default function EventsPage() {
@@ -72,6 +74,17 @@ export default function EventsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
+  const stats = useMemo(() => {
+    const alertCount = events.filter((e) => e.isAlert).length;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayCount = events.filter((e) => new Date(e.timestamp).toISOString().slice(0, 10) === todayStr).length;
+    const avgConfidence = events.length > 0
+      ? (events.reduce((acc, e) => acc + (e.confidence || 0), 0) / events.length) * 100
+      : 0;
+
+    return { alertCount, todayCount, avgConfidence };
+  }, [events]);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -86,6 +99,49 @@ export default function EventsPage() {
           <RefreshCw className="w-4 h-4" />
           {t("common.refresh")}
         </button>
+      </div>
+
+      {/* Event Statistics Summary Header */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-medium">Tổng số sự kiện</p>
+            <h3 className="text-2xl font-bold text-white mt-1">{total.toLocaleString()}</h3>
+          </div>
+          <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
+            <Activity className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-medium">Cảnh báo nguy cơ</p>
+            <h3 className="text-2xl font-bold text-red-400 mt-1">{stats.alertCount.toLocaleString()}</h3>
+          </div>
+          <div className="p-3 bg-red-500/10 rounded-xl text-red-400 border border-red-500/20">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-medium">Sự kiện hôm nay</p>
+            <h3 className="text-2xl font-bold text-emerald-400 mt-1">{stats.todayCount.toLocaleString()}</h3>
+          </div>
+          <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-medium">Độ tin cậy AI trung bình</p>
+            <h3 className="text-2xl font-bold text-amber-400 mt-1">{stats.avgConfidence.toFixed(1)}%</h3>
+          </div>
+          <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/20">
+            <Zap className="w-5 h-5" />
+          </div>
+        </div>
       </div>
 
       {/* Filters */}

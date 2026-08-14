@@ -2,10 +2,12 @@
 
 import { api } from "@/lib/api";
 import { ApiResponse } from "@/types";
-import { BarChart2, Download, RefreshCw } from "lucide-react";
+import { Activity, BarChart2, Clock, Download, PieChart as PieIcon, RefreshCw, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -196,31 +198,46 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          {/* Summary cards */}
-          {period === "daily" && dailyReport && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">{t("reports.totalEvents")}</p>
+          {/* Summary KPI cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">{t("reports.totalEvents")}</p>
                 <p className="text-3xl font-bold text-white mt-1">
-                  {dailyReport.totalEvents}
+                  {period === "daily" ? dailyReport?.totalEvents ?? 0 : weeklyReport?.dailyData.reduce((acc, d) => acc + d.count, 0) ?? 0}
                 </p>
               </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">{t("reports.totalAlerts")}</p>
-                <p className="text-3xl font-bold text-red-400 mt-1">
-                  {dailyReport.totalAlerts}
-                </p>
-              </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-sm">{t("reports.alertRate")}</p>
-                <p className="text-3xl font-bold text-yellow-400 mt-1">
-                  {dailyReport.totalEvents > 0
-                    ? `${((dailyReport.totalAlerts / dailyReport.totalEvents) * 100).toFixed(0)}%`
-                    : "0%"}
-                </p>
+              <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
+                <Activity className="w-6 h-6" />
               </div>
             </div>
-          )}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">{t("reports.totalAlerts")}</p>
+                <p className="text-3xl font-bold text-red-400 mt-1">
+                  {period === "daily" ? dailyReport?.totalAlerts ?? 0 : weeklyReport?.dailyData.reduce((acc, d) => acc + d.alerts, 0) ?? 0}
+                </p>
+              </div>
+              <div className="p-3 bg-red-500/10 rounded-xl text-red-400 border border-red-500/20">
+                <TrendingUp className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-wider">{t("reports.alertRate")}</p>
+                <p className="text-3xl font-bold text-yellow-400 mt-1">
+                  {(() => {
+                    const totalEv = period === "daily" ? dailyReport?.totalEvents ?? 0 : weeklyReport?.dailyData.reduce((acc, d) => acc + d.count, 0) ?? 0;
+                    const totalAl = period === "daily" ? dailyReport?.totalAlerts ?? 0 : weeklyReport?.dailyData.reduce((acc, d) => acc + d.alerts, 0) ?? 0;
+                    return totalEv > 0 ? `${((totalAl / totalEv) * 100).toFixed(0)}%` : "0%";
+                  })()}
+                </p>
+              </div>
+              <div className="p-3 bg-yellow-500/10 rounded-xl text-yellow-400 border border-yellow-500/20">
+                <Clock className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -229,29 +246,12 @@ export default function ReportsPage() {
                 <BarChart2 className="w-4 h-4 text-blue-400" />
                 {period === "daily" ? t("reports.eventsByType") : t("reports.eventsOverTime")}
               </h3>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={240}>
                 {period === "daily" ? (
-                  <BarChart
-                    data={chartData as { type: string; count: number }[]}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#1f2937"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="type"
-                      stroke="#4b5563"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="#4b5563"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                    />
+                  <BarChart data={chartData as { type: string; count: number }[]}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                    <XAxis dataKey="type" stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#111827",
@@ -264,32 +264,20 @@ export default function ReportsPage() {
                     <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 ) : (
-                  <BarChart
-                    data={
-                      chartData as {
-                        date: string;
-                        [key: string]: string | number;
-                      }[]
-                    }
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#1f2937"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke="#4b5563"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="#4b5563"
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                    />
+                  <AreaChart data={chartData as { date: string; [key: string]: string | number }[]}>
+                    <defs>
+                      <linearGradient id="colorEvents" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorAlerts" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#dc2626" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
+                    <XAxis dataKey="date" stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#111827",
@@ -300,33 +288,26 @@ export default function ReportsPage() {
                       }}
                     />
                     <Legend />
-                    <Bar
-                      dataKey={t("reports.chartEvents")}
-                      fill="#2563eb"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      dataKey={t("reports.chartAlerts")}
-                      fill="#dc2626"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
+                    <Area type="monotone" dataKey={t("reports.chartEvents")} stroke="#2563eb" fillOpacity={1} fill="url(#colorEvents)" />
+                    <Area type="monotone" dataKey={t("reports.chartAlerts")} stroke="#dc2626" fillOpacity={1} fill="url(#colorAlerts)" />
+                  </AreaChart>
                 )}
               </ResponsiveContainer>
             </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h3 className="text-sm font-semibold text-gray-300 mb-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-5 flex items-center gap-2">
+                <PieIcon className="w-4 h-4 text-purple-400" />
                 {t("reports.byEventType")}
               </h3>
               {pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      outerRadius={70}
+                      outerRadius={75}
                       dataKey="value"
                       label={({ name, percent }) =>
                         `${name} ${(percent * 100).toFixed(0)}%`
@@ -335,10 +316,7 @@ export default function ReportsPage() {
                       fontSize={10}
                     >
                       {pieData.map((_, index) => (
-                        <Cell
-                          key={index}
-                          fill={COLORS[index % COLORS.length]}
-                        />
+                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip

@@ -29,6 +29,8 @@ import React, { useCallback, useEffect, useState } from "react";
 export interface LicensePlateEvent {
   id: string;
   streamId: string;
+  cameraName?: string;
+  cameraLocation?: string;
   taskName: string;
   eventTime: string;
   plateText: string;
@@ -440,7 +442,7 @@ export function LicensePlatesDashboard() {
                   <th className="py-3.5 px-4 font-semibold">Loại phương tiện</th>
                   <th className="py-3.5 px-4 font-semibold">Độ tin cậy AI</th>
                   <th className="py-3.5 px-4 font-semibold">Thời gian ghi nhận</th>
-                  <th className="py-3.5 px-4 font-semibold">Camera Stream ID</th>
+                  <th className="py-3.5 px-4 font-semibold">Tên & Vị trí Camera</th>
                   <th className="py-3.5 px-4 font-semibold text-right">Chi tiết</th>
                 </tr>
               </thead>
@@ -515,9 +517,14 @@ export function LicensePlatesDashboard() {
                       {formatDate(event.eventTime)}
                     </td>
 
-                    {/* Stream ID */}
-                    <td className="py-3.5 px-4 font-mono text-xs text-gray-400 max-w-[160px] truncate">
-                      {event.streamId}
+                    {/* Camera Name & Location */}
+                    <td className="py-3.5 px-4 text-xs font-medium text-gray-200 max-w-[200px] truncate">
+                      <span>{event.cameraName || "CAM-001"}</span>
+                      {event.cameraLocation && (
+                        <span className="text-gray-400 ml-1 font-normal">
+                          ({event.cameraLocation})
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}
@@ -709,8 +716,10 @@ export function LicensePlatesDashboard() {
             </div>
 
             <div className="bg-gray-950/60 p-3 rounded-lg border border-gray-800/80 space-y-1">
-              <span className="text-xs text-gray-500 block">Stream ID / Nguồn Camera</span>
-              <span className="font-mono text-xs text-gray-300 break-all">{selectedEvent.streamId}</span>
+              <span className="text-xs text-gray-500 block">Tên & Vị trí Camera (Nguồn)</span>
+              <span className="font-medium text-xs text-gray-200 block">
+                {selectedEvent.cameraName || "CAM-001"} ({selectedEvent.cameraLocation || "Cổng chính"})
+              </span>
             </div>
 
             <div className="pt-2 text-right">

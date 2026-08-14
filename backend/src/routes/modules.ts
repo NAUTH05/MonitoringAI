@@ -7,6 +7,25 @@ const router = Router();
 // GET /api/modules
 router.get('/', authenticate, async (_req: Request, res: Response) => {
   try {
+    const defaultModules = [
+      { name: 'Intrusion Detection', code: 'INTRUSION', description: 'Detects unauthorized entry into restricted areas' },
+      { name: 'Fire Detection', code: 'FIRE', description: 'Detects fire and flames in real-time' },
+      { name: 'Smoke Detection', code: 'SMOKE', description: 'Detects smoke presence before fire spreads' },
+      { name: 'PPE Detection', code: 'PPE', description: 'Detects personal protective equipment compliance' },
+      { name: 'Face Recognition', code: 'FACE', description: 'Identifies and verifies registered personnel' },
+      { name: 'Vehicle Detection & Counting', code: 'VEHICLE', description: 'Thống kê, phân loại và đếm số lượng xe (Ô tô, Xe máy, Xe tải, Bus)' },
+      { name: 'Flood Detection', code: 'FLOOD', description: 'Phát hiện ngập nước, đo mực nước và cảnh báo ngập lụt' },
+      { name: 'Traffic Violation Detection', code: 'TRAFFIC_VIOLATION', description: 'Phát hiện các hành vi vi phạm giao thông (Vượt đèn đỏ, Ngược chiều, Sai làn)' },
+    ];
+
+    for (const m of defaultModules) {
+      await prisma.aiModule.upsert({
+        where: { code: m.code },
+        update: { name: m.name, description: m.description },
+        create: m,
+      });
+    }
+
     const modules = await prisma.aiModule.findMany({ orderBy: { name: 'asc' } });
     res.json({ success: true, data: modules });
   } catch {

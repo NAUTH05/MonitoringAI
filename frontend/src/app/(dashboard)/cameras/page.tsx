@@ -139,7 +139,10 @@ export default function CamerasPage() {
                   {t("cameras.colLocation")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {t("cameras.colRtsp")}
+                  {t("cameras.colResolution")}
+                </th>
+                <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {t("cameras.colStorage")}
                 </th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   {t("cameras.colStatus")}
@@ -159,7 +162,7 @@ export default function CamerasPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-4">
                         <div className="h-4 bg-gray-800 rounded animate-pulse" />
                       </td>
@@ -168,7 +171,7 @@ export default function CamerasPage() {
                 ))
               ) : cameras.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-500">
+                  <td colSpan={8} className="text-center py-12 text-gray-500">
                     {t("cameras.noCameras")}
                   </td>
                 </tr>
@@ -180,9 +183,22 @@ export default function CamerasPage() {
                     </td>
                     <td className="px-4 py-4 text-gray-300">{cam.location}</td>
                     <td className="px-4 py-4">
-                      <span className="font-mono text-xs text-gray-400 truncate max-w-48 block">
-                        {cam.rtspUrl}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        {cam.resolution || "1080p HD"}
                       </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-amber-400">
+                          {cam.storageGb ?? 18.5} GB
+                        </span>
+                        <div className="w-12 bg-gray-950 rounded-full h-1.5 overflow-hidden border border-gray-800 hidden sm:block">
+                          <div
+                            className="bg-amber-500 h-full rounded-full"
+                            style={{ width: `${Math.min(100, ((cam.storageGb ?? 18.5) / 100) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <span

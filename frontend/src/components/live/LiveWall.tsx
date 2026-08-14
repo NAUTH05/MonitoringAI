@@ -1,6 +1,7 @@
 "use client";
 
 import { CameraFeed } from "@/components/cameras/CameraFeed";
+import { ViolationGrid2x2 } from "@/components/live/ViolationGrid2x2";
 import { useSocket } from "@/hooks/useSocket";
 import { api } from "@/lib/api";
 import {
@@ -19,12 +20,14 @@ import {
   Cpu,
   Grid2x2,
   GripVertical,
+  LayoutGrid,
   Monitor,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   RotateCcw,
   Save,
+  ShieldAlert,
   Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -188,6 +191,7 @@ export function LiveWall() {
   const [gridGap, setGridGap] = useState<number>(2);
   const [currentBp, setCurrentBp] = useState<BP>("lg");
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [is2x2Grid, setIs2x2Grid] = useState(false);
 
   // Live <video> elements by camera id, for capture/record.
   const videoEls = useRef<Record<string, HTMLVideoElement | null>>({});
@@ -564,6 +568,20 @@ export function LiveWall() {
               </button>
             )}
 
+            {/* 2x2 Violation Snapshot Grid view toggle */}
+            <button
+              onClick={() => setIs2x2Grid((prev) => !prev)}
+              className={`p-1.5 border rounded-md transition flex items-center gap-1 text-xs ${
+                is2x2Grid
+                  ? "border-red-600 text-red-400 bg-red-950/50 font-bold"
+                  : "border-neutral-800 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+              }`}
+              title="Lưới vi phạm 2x2 trực tiếp"
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lưới 2x2</span>
+            </button>
+
             {/* Save layout & Restore saved layout */}
             <button
               onClick={saveCustomLayout}
@@ -627,9 +645,11 @@ export function LiveWall() {
           </div>
         </div>
 
-        {/* Grid */}
+        {/* Grid or 2x2 Violation View */}
         <div className="flex-1 overflow-y-auto pr-1">
-          {cameras.length === 0 ? (
+          {is2x2Grid ? (
+            <ViolationGrid2x2 />
+          ) : cameras.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center border border-dashed border-neutral-800 rounded-lg">
               <Monitor className="w-7 h-7 text-neutral-700 mb-2" />
               <p className="text-neutral-400 text-sm">{t("live.noCameras")}</p>
@@ -721,11 +741,12 @@ export function LiveWall() {
       {/* AI detection feed */}
       {showFeed && (
         <div className="w-full xl:w-72 border border-neutral-800 rounded-lg flex flex-col shrink-0 overflow-hidden h-[280px] xl:h-auto">
-          <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-neutral-200">
+          <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between bg-neutral-950">
+            <h2 className="text-sm font-medium text-neutral-200 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-blue-400" />
               {t("live.detectionFeed")}
             </h2>
-            <span className="text-[10px] text-neutral-500">{t("live.liveTag")}</span>
+            <span className="text-[10px] text-neutral-500 font-mono">{t("live.liveTag")}</span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -739,8 +760,8 @@ export function LiveWall() {
               eventLog.map((event) => (
                 <div
                   key={event.id}
-                  className={`p-2.5 rounded-md border text-xs flex flex-col gap-1.5 cursor-pointer transition hover:bg-neutral-900 ${
-                    event.isAlert ? "border-red-900/60" : "border-neutral-800"
+                  className={`p-2.5 rounded-lg border text-xs flex flex-col gap-1.5 cursor-pointer transition hover:bg-neutral-900 ${
+                    event.isAlert ? "border-red-900/60 bg-red-950/20" : "border-neutral-800 bg-neutral-950/40"
                   }`}
                   onClick={() => {
                     if (
@@ -759,15 +780,20 @@ export function LiveWall() {
                     <span className="font-medium text-neutral-200 truncate max-w-[130px]">
                       {event.camera?.name || t("live.unknownCamera")}
                     </span>
-                    <span className="text-[10px] text-neutral-500">
+                    <span className="text-[10px] text-neutral-500 font-mono">
                       {formatDate(event.timestamp).split(" ")[1]}
                     </span>
                   </div>
+                  {event.imageUrl && (
+                    <div className="w-full h-16 bg-neutral-900 rounded border border-neutral-800 overflow-hidden relative">
+                      <img src={event.imageUrl} alt={event.eventType} className="w-full h-full object-cover" />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-neutral-400">
-                    <span className="text-[10px] uppercase tracking-wide">
+                    <span className={`text-[10px] font-bold uppercase tracking-wide ${event.isAlert ? "text-red-400" : "text-blue-400"}`}>
                       {event.eventType}
                     </span>
-                    <span className="text-[10px] font-medium text-neutral-300">
+                    <span className="text-[10px] font-mono text-neutral-300">
                       {(event.confidence * 100).toFixed(0)}%
                     </span>
                   </div>

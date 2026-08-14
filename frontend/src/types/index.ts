@@ -1,5 +1,5 @@
 export type CameraStatus = 'ONLINE' | 'OFFLINE' | 'ERROR';
-export type EventType = 'INTRUSION' | 'FIRE' | 'SMOKE' | 'PPE' | 'FACE' | 'VEHICLE';
+export type EventType = 'INTRUSION' | 'FIRE' | 'SMOKE' | 'PPE' | 'FACE' | 'VEHICLE' | 'FLOOD' | 'TRAFFIC_VIOLATION';
 export type AlertStatus = 'UNREAD' | 'READ' | 'ACKNOWLEDGED';
 export type UserRole = 'Admin' | 'Manager' | 'Operator' | 'Viewer';
 
@@ -50,6 +50,8 @@ export interface Camera {
   status: CameraStatus;
   isActive: boolean;
   lastHeartbeat?: string;
+  resolution?: string;
+  storageGb?: number;
   createdAt: string;
   updatedAt: string;
   cameraModules?: CameraModule[];

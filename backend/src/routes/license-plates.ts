@@ -1,5 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { Prisma } from '@prisma/client';
+import prisma from '../lib/prisma';
 import aicamPrisma from '../lib/aicamPrisma';
 import { authenticate } from '../middleware/auth';
 
@@ -192,23 +193,38 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
     const total = Number(countResult[0]?.count || 0);
 
+    // Fetch system cameras to map stream_id -> Camera Name & Location
+    const sysCameras = await prisma.camera.findMany({ select: { name: true, location: true, rtspUrl: true } });
+
     const minioBaseUrl = process.env.MINIO_PUBLIC_URL ? process.env.MINIO_PUBLIC_URL.replace(/\/+$/, '') : null;
 
-    const formattedEvents = events.map((e) => ({
-      id: e.id,
-      streamId: e.stream_id,
-      taskName: e.task_name,
-      eventTime: e.event_time,
-      plateText: e.plate_text,
-      vehicleType: e.vehicle_type,
-      plateColor: e.plate_color,
-      confidence: e.confidence,
-      imagePath: e.image_path,
-      thumbnailPath: e.thumbnail_path,
-      imageUrl: e.image_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.image_path}` : `/api/aicam-media/${e.image_path}`) : null,
-      thumbnailUrl: e.thumbnail_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.thumbnail_path}` : `/api/aicam-media/${e.thumbnail_path}`) : null,
-      createdAt: e.created_at,
-    }));
+    const formattedEvents = events.map((e) => {
+      // Find matching camera in system
+      const matchCam = sysCameras.find(
+        (c) => c.rtspUrl.includes(e.stream_id || '') || c.name.toLowerCase() === (e.stream_id || '').toLowerCase()
+      );
+
+      const cameraName = matchCam ? matchCam.name : (e.stream_id ? `CAM-${e.stream_id.toUpperCase().replace(/^STREAM_?/, '')}` : 'CAM-001');
+      const cameraLocation = matchCam ? matchCam.location : 'Cổng chính';
+
+      return {
+        id: e.id,
+        streamId: e.stream_id,
+        cameraName,
+        cameraLocation,
+        taskName: e.task_name,
+        eventTime: e.event_time,
+        plateText: e.plate_text,
+        vehicleType: e.vehicle_type,
+        plateColor: e.plate_color,
+        confidence: e.confidence,
+        imagePath: e.image_path,
+        thumbnailPath: e.thumbnail_path,
+        imageUrl: e.image_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.image_path}` : `/api/aicam-media/${e.image_path}`) : null,
+        thumbnailUrl: e.thumbnail_path ? (minioBaseUrl ? `${minioBaseUrl}/${e.thumbnail_path}` : `/api/aicam-media/${e.thumbnail_path}`) : null,
+        createdAt: e.created_at,
+      };
+    });
 
     res.json({
       success: true,
