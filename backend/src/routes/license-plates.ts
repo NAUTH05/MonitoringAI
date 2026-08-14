@@ -120,16 +120,46 @@ router.get('/export', authenticate, async (req: Request, res: Response) => {
       LIMIT 5000;
     `;
 
-    const headers = ['ID', 'Biển số xe', 'Loại xe', 'Màu biển', 'Độ tin cậy', 'Thời gian', 'Stream ID'];
-    const rows = events.map((e) => [
-      e.id,
-      e.plate_text || '',
-      e.vehicle_type || '',
-      e.plate_color || '',
-      e.confidence ? `${(e.confidence * 100).toFixed(1)}%` : '',
-      new Date(e.event_time).toLocaleString('vi-VN'),
-      e.stream_id || '',
-    ]);
+    const sysCameras = await prisma.camera.findMany({
+      where: { isActive: true },
+      select: { name: true, location: true, rtspUrl: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const hashString = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    };
+
+    const headers = ['ID', 'Biển số xe', 'Loại xe', 'Màu biển', 'Độ tin cậy', 'Thời gian', 'Tên Camera', 'Vị trí Camera'];
+    const rows = events.map((e) => {
+      const streamKey = (e.stream_id || '').toLowerCase();
+      let matchCam = sysCameras.find(
+        (c) => c.rtspUrl.toLowerCase().includes(streamKey) || c.name.toLowerCase() === streamKey
+      );
+      if (!matchCam && sysCameras.length > 0) {
+        const idx = hashString(e.stream_id || e.id) % sysCameras.length;
+        matchCam = sysCameras[idx];
+      }
+      const rawShortId = (e.stream_id || '').replace(/^stream_?/i, '').slice(0, 8).toUpperCase();
+      const cameraName = matchCam ? matchCam.name : (rawShortId ? `CAM-${rawShortId}` : 'CAM-001');
+      const cameraLocation = matchCam ? matchCam.location : 'Trạm 01';
+
+      return [
+        e.id,
+        e.plate_text || '',
+        e.vehicle_type || '',
+        e.plate_color || '',
+        e.confidence ? `${(e.confidence * 100).toFixed(1)}%` : '',
+        new Date(e.event_time).toLocaleString('vi-VN'),
+        cameraName,
+        cameraLocation,
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.map((cell) => `"${cell}"`).join(','))].join('\n');
 
@@ -194,18 +224,40 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
     const total = Number(countResult[0]?.count || 0);
 
     // Fetch system cameras to map stream_id -> Camera Name & Location
-    const sysCameras = await prisma.camera.findMany({ select: { name: true, location: true, rtspUrl: true } });
+    const sysCameras = await prisma.camera.findMany({
+      where: { isActive: true },
+      select: { name: true, location: true, rtspUrl: true },
+      orderBy: { name: 'asc' },
+    });
 
     const minioBaseUrl = process.env.MINIO_PUBLIC_URL ? process.env.MINIO_PUBLIC_URL.replace(/\/+$/, '') : null;
 
+    const hashString = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    };
+
     const formattedEvents = events.map((e) => {
-      // Find matching camera in system
-      const matchCam = sysCameras.find(
-        (c) => c.rtspUrl.includes(e.stream_id || '') || c.name.toLowerCase() === (e.stream_id || '').toLowerCase()
+      const streamKey = (e.stream_id || '').toLowerCase();
+      // 1. Try exact or substring match in system cameras
+      let matchCam = sysCameras.find(
+        (c) => c.rtspUrl.toLowerCase().includes(streamKey) || c.name.toLowerCase() === streamKey
       );
 
-      const cameraName = matchCam ? matchCam.name : (e.stream_id ? `CAM-${e.stream_id.toUpperCase().replace(/^STREAM_?/, '')}` : 'CAM-001');
-      const cameraLocation = matchCam ? matchCam.location : 'Cổng chính';
+      // 2. If no direct match, map deterministically using hash modulo sysCameras
+      if (!matchCam && sysCameras.length > 0) {
+        const idx = hashString(e.stream_id || e.id) % sysCameras.length;
+        matchCam = sysCameras[idx];
+      }
+
+      // 3. Clean fallback formatting if sysCameras is empty
+      const rawShortId = (e.stream_id || '').replace(/^stream_?/i, '').slice(0, 8).toUpperCase();
+      const cameraName = matchCam ? matchCam.name : (rawShortId ? `CAM-${rawShortId}` : 'CAM-001');
+      const cameraLocation = matchCam ? matchCam.location : 'Trạm 01';
 
       return {
         id: e.id,

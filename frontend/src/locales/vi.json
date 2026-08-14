@@ -70,6 +70,8 @@
     "colRtsp": "URL RTSP",
     "colStatus": "Trạng thái",
     "colModules": "Module AI",
+    "colResolution": "Độ phân giải",
+    "colStorage": "Dung lượng đã lưu (GB)",
     "colCreated": "Ngày tạo",
     "colActions": "Thao tác",
     "noCameras": "Không tìm thấy camera",
