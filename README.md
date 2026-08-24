@@ -207,3 +207,10 @@ Lưu ý: khi go2rtc ghi lại file (lần thay đổi đầu tiên qua UI), nó 
 | Manager | Xem + quản lý events/reports |
 | Operator | Xem + acknowledge alerts |
 | Viewer | Chỉ xem |
+
+## Reason Why PostgreSQL
+1. Xử lí tốt dữ liệu hỗn hợp (user,role,rules,camera,events,logs,reports...)
+2. Tối ưu cho dữ liệu chuỗi thời gian Và đánh index với tốc độ cao
+3. Tương thích với typescript và Prisma cực tốt
+4. Phù hợp với triển khai trên server nội bộ
+5. Không phát sinh chi phí bản quyền
