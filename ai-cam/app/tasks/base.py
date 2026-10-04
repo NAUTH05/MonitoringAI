@@ -26,6 +26,9 @@ class BaseTask(ABC):
     description: str = ""
     #: MonitoringAI event type pushed by this task (see backend eventType enum).
     event_type: str = "EVENT"
+    #: When True the pipeline wraps the event in an EvidenceSession (snapshots +
+    #: video) that accumulates evidence onto ONE event for the whole episode.
+    supports_evidence_session: bool = False
 
     @abstractmethod
     def load(self) -> None:
@@ -39,6 +42,14 @@ class BaseTask(ABC):
         return frame
 
     def is_event(self, result: dict) -> bool:
+        return False
+
+    def session_active(self, result: dict) -> bool:
+        """True while the episode is still ongoing (for evidence sessions).
+
+        Only meaningful when :attr:`supports_evidence_session` is True: the
+        pipeline uses it to decide when to stop snapshots / recording.
+        """
         return False
 
     def event_fields(self, result: dict) -> Optional[dict]:

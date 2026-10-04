@@ -1,6 +1,6 @@
 "use client";
 
-import { EventDetailDialog } from "@/components/events/EventDetailDialog";
+import { useEventDetail } from "@/components/events/EventDetailProvider";
 import { useSocket } from "@/hooks/useSocket";
 import { api } from "@/lib/api";
 import {
@@ -28,11 +28,11 @@ const EVENT_TYPES: EventType[] = [
 
 export default function EventsPage() {
   const { t } = useTranslation();
+  const { openEvent } = useEventDetail();
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [alertFilter, setAlertFilter] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -310,7 +310,8 @@ export default function EventsPage() {
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       <button
-                        onClick={() => setSelectedEvent(event)}
+                        onClick={() => openEvent(event)}
+                        title={t("alertToast.openDetail")}
                         className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition"
                       >
                         <Eye className="w-4 h-4" />
@@ -351,13 +352,6 @@ export default function EventsPage() {
           </div>
         )}
       </div>
-
-      {selectedEvent && (
-        <EventDetailDialog
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
-      )}
     </div>
   );
 }

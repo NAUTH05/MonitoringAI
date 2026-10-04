@@ -42,8 +42,14 @@ export const openapiSpec = {
             enum: ['INTRUSION', 'FIRE', 'SMOKE', 'PPE', 'FACE', 'VEHICLE'],
           },
           confidence: { type: 'number', minimum: 0, maximum: 1, example: 0.92 },
-          imageUrl: { type: 'string', example: '/evidence/sample-intrusion.svg' },
-          videoUrl: { type: 'string', example: '/evidence/TEST_CAM_1.mp4' },
+          imageUrl: {
+            type: 'string',
+            example: 'http://localhost:4000/api/aicam-media/cam_<uuid>/2026-01-01/<eventId>/image_0001.jpg',
+          },
+          videoUrl: {
+            type: 'string',
+            example: 'http://localhost:4000/api/aicam-media/cam_<uuid>/2026-01-01/<eventId>/evidence.mp4',
+          },
           timestamp: { type: 'string', format: 'date-time' },
         },
       },

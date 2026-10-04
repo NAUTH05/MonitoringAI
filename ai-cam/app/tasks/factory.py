@@ -42,8 +42,11 @@ def create_task(
     registry: Any,
     logger: logging.Logger,
     roi_provider: Optional[Any] = None,
+    task_name: Optional[str] = None,
 ) -> BaseTask:
-    name = resolve_task_name(settings.task_name)
+    # ``task_name`` lets a per-camera worker pick its own task (multi-camera);
+    # when omitted the global AI_TASK_NAME is used (legacy single-camera).
+    name = resolve_task_name(task_name or settings.task_name)
     if name == "intrusion":
         from .intrusion.task import IntrusionTask
 

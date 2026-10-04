@@ -105,6 +105,13 @@ Verify CUDA and the models:
 Copy-Item .env.example .env
 ```
 
+> **Cameras come from the database, not from `.env`.** By default
+> (`AI_RUNTIME_CONFIG=true`) the runtime discovers every enabled camera from
+> `GET /api/ai/runtime-config` and runs one worker per camera — adding a camera
+> is a UI action. The per-camera variables below (`CAMERA_SOURCE_TYPE`,
+> `CAMERA_URL`, `STREAM_ID`, `MONITORING_CAMERA_ID`, `AI_TASK_NAME`) are the
+> **legacy single-camera fallback** used only when `AI_RUNTIME_CONFIG=false`.
+
 Key settings (see `.env.example` for the full list and explanations):
 
 | Variable | Default | Meaning |

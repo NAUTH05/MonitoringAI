@@ -51,6 +51,8 @@ _COLOR_ROI = (255, 0, 255)         # ROI outline
 class IntrusionTask(BaseTask):
     name = "intrusion"
     event_type = "INTRUSION"
+    #: One episode = one event with a growing evidence collection.
+    supports_evidence_session = True
     description = (
         "Person YOLO + ByteTrack -> person bbox/ROI overlap ratio -> per-track "
         "debounce/dwell -> one INTRUSION event per entry."
@@ -222,6 +224,17 @@ class IntrusionTask(BaseTask):
     # ── event hooks ───────────────────────────────────────────────────────
     def is_event(self, result: dict) -> bool:
         return bool(result.get("new_violations"))
+
+    def session_active(self, result: dict) -> bool:
+        """Episode ongoing while ANY confirmed track is still INSIDE the ROI.
+
+        Drives the evidence session: snapshots continue and the recording keeps
+        running until the last violating track has left (then post-roll).
+        """
+        return any(
+            det.get("state") == TrackState.INSIDE.value
+            for det in result.get("detections", [])
+        )
 
     def event_fields(self, result: dict) -> Optional[dict]:
         violations = result.get("new_violations")

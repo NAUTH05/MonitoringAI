@@ -43,6 +43,12 @@ model Camera {
   location      String
   rtspUrl       String         @map("rtsp_url")
   subRtspUrl    String?        @map("sub_rtsp_url")
+  /// Managed go2rtc stream name (e.g. cam_<uuid>). Internal implementation
+  /// detail — the user never types it. Drives the AI source URL.
+  streamName    String?        @map("stream_name")
+  /// URL the AI runtime consumes (usually rtsp://<host>:8554/<streamName>).
+  /// Kept in the DB so AI-Cam discovers it instead of reading per-camera env.
+  aiSourceUrl   String?        @map("ai_source_url")
   status        CameraStatus   @default(OFFLINE)
   isActive      Boolean        @default(true) @map("is_active")
   lastHeartbeat DateTime?      @map("last_heartbeat")
@@ -102,24 +108,53 @@ enum AlertStatus {
   ACKNOWLEDGED
 }
 
+enum EvidenceType {
+  IMAGE
+  VIDEO
+}
+
 model Event {
-  id         String    @id @default(uuid())
-  cameraId   String    @map("camera_id")
-  eventType  EventType @map("event_type")
+  id         String     @id @default(uuid())
+  cameraId   String     @map("camera_id")
+  eventType  EventType  @map("event_type")
   confidence Float
-  imageUrl   String?   @map("image_url")
-  videoUrl   String?   @map("video_url")
-  timestamp  DateTime  @default(now())
-  isAlert    Boolean   @default(false) @map("is_alert")
-  camera     Camera    @relation(fields: [cameraId], references: [id])
+  imageUrl   String?    @map("image_url")
+  videoUrl   String?    @map("video_url")
+  timestamp  DateTime   @default(now())
+  isAlert    Boolean    @default(false) @map("is_alert")
+  camera     Camera     @relation(fields: [cameraId], references: [id])
   alert      Alert?
-  createdAt  DateTime  @default(now()) @map("created_at")
+  evidence   Evidence[]
+  createdAt  DateTime   @default(now()) @map("created_at")
 
   @@map("events")
   @@index([cameraId])
   @@index([eventType])
   @@index([timestamp])
   @@index([isAlert])
+}
+
+/// One row per evidence artifact attached to an Event. An intrusion episode is
+/// ONE Event that accumulates a series of annotated snapshots plus (optionally)
+/// a recorded video. `imageUrl`/`videoUrl` on Event are kept for backwards
+/// compatibility and mirror the first image / the finished video.
+model Evidence {
+  id         String       @id @default(uuid())
+  eventId    String       @map("event_id")
+  event      Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type       EvidenceType
+  url        String
+  objectKey  String?      @map("object_key")
+  sequence   Int          @default(0)
+  capturedAt DateTime     @default(now()) @map("captured_at")
+  durationMs Int?         @map("duration_ms")
+  metadata   Json?
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@map("evidence")
+  @@index([eventId])
+  @@index([eventId, sequence])
+  @@index([type])
 }
 
 model Alert {

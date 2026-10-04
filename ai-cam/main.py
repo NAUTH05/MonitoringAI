@@ -11,7 +11,7 @@ import sys
 
 from app.config import Settings, load_dotenv
 from app.core.diagnostics import log_environment
-from app.core.pipeline import Pipeline
+from app.core.stream_manager import StreamManager
 
 
 def configure_logging(level: str) -> None:
@@ -38,7 +38,10 @@ def main() -> int:
     log_environment(logger)
     logger.info("Selected configuration: %s", settings)
 
-    Pipeline(settings, logger).run()
+    # Multi-camera runtime: discovers enabled cameras from MonitoringAI and runs
+    # one worker per camera. Falls back to the legacy single-camera env config
+    # when AI_RUNTIME_CONFIG=false.
+    StreamManager(settings, logger).run()
     return 0
 
 

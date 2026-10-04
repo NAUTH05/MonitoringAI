@@ -1,5 +1,6 @@
 "use client";
 
+import { useEventDetail } from "@/components/events/EventDetailProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { formatDate } from "@/lib/utils";
@@ -17,6 +18,7 @@ type AlertPayload = Alert & { event: Event };
 export function Header({ alertCount: initialAlertCount = 0 }: HeaderProps) {
   const { user, logout } = useAuth();
   const { t, i18n } = useTranslation();
+  const { openEvent } = useEventDetail();
   const [currentLang, setCurrentLang] = useState(() => i18n.language || "vi");
 
   const [alerts, setAlerts] = useState<AlertPayload[]>([]);
@@ -115,7 +117,21 @@ export function Header({ alertCount: initialAlertCount = 0 }: HeaderProps) {
                   alerts.map((alert) => (
                     <div
                       key={alert.id}
-                      className="p-3 hover:bg-neutral-850 transition flex items-start justify-between gap-3 text-xs"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setShowNotifications(false);
+                        if (alert.event) openEvent(alert.event, alert.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if ((e.key === "Enter" || e.key === " ") && alert.event) {
+                          e.preventDefault();
+                          setShowNotifications(false);
+                          openEvent(alert.event, alert.id);
+                        }
+                      }}
+                      title={t("alertToast.openDetail")}
+                      className="p-3 hover:bg-neutral-850 transition flex items-start justify-between gap-3 text-xs cursor-pointer"
                     >
                       <div className="flex items-start gap-2.5 min-w-0">
                         <div className="mt-0.5 p-1 bg-red-500/10 rounded border border-red-500/30 text-red-400 shrink-0">

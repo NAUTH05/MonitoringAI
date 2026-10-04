@@ -35,6 +35,42 @@ from ..tasks.intrusion.geometry import normalize_polygon
 Point = Tuple[float, float]
 
 
+class MutableRoiProvider:
+    """In-memory ROI holder pushed by the StreamManager.
+
+    The multi-camera runtime receives each camera's ``roiPolygon`` inside the
+    runtime-config payload, so no per-camera HTTP poll is needed: the manager
+    calls :meth:`set` and the task picks the new polygon up on the next frame
+    (live ROI edits without restarting the model).
+    """
+
+    def __init__(self, polygon: Optional[List[Point]] = None) -> None:
+        self._lock = threading.Lock()
+        self._polygon: Optional[List[Point]] = polygon
+
+    def start(self) -> None:  # parity with RoiConfigProvider
+        return
+
+    def stop(self) -> None:
+        return
+
+    def set(self, polygon: Optional[List[Point]]) -> None:
+        with self._lock:
+            self._polygon = list(polygon) if polygon else None
+
+    def current(self) -> Optional[List[Point]]:
+        with self._lock:
+            return list(self._polygon) if self._polygon else None
+
+    def describe(self) -> dict:
+        with self._lock:
+            return {
+                "source": "runtime-config",
+                "points": len(self._polygon) if self._polygon else 0,
+                "polygon": list(self._polygon) if self._polygon else None,
+            }
+
+
 class RoiConfigProvider:
     def __init__(self, settings, logger: logging.Logger) -> None:
         self.settings = settings

@@ -1,7 +1,7 @@
 "use client";
 
 import { CameraFeed } from "@/components/cameras/CameraFeed";
-import { ViolationGrid2x2 } from "@/components/live/ViolationGrid2x2";
+import { useEventDetail } from "@/components/events/EventDetailProvider";
 import { useSocket } from "@/hooks/useSocket";
 import { api } from "@/lib/api";
 import {
@@ -161,6 +161,7 @@ function streamNameOf(url?: string): string | null {
 
 export function LiveWall() {
   const { t } = useTranslation();
+  const { openEvent } = useEventDetail();
 
   // Seed from module cache so returning to /live paints instantly (no cold-start).
   const [cameras, setCameras] = useState<Camera[]>(() => liveCache.getCameras() ?? []);
@@ -191,7 +192,6 @@ export function LiveWall() {
   const [gridGap, setGridGap] = useState<number>(2);
   const [currentBp, setCurrentBp] = useState<BP>("lg");
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [is2x2Grid, setIs2x2Grid] = useState(false);
 
   // Live <video> elements by camera id, for capture/record.
   const videoEls = useRef<Record<string, HTMLVideoElement | null>>({});
@@ -568,20 +568,6 @@ export function LiveWall() {
               </button>
             )}
 
-            {/* 2x2 Violation Snapshot Grid view toggle */}
-            <button
-              onClick={() => setIs2x2Grid((prev) => !prev)}
-              className={`p-1.5 border rounded-md transition flex items-center gap-1 text-xs ${
-                is2x2Grid
-                  ? "border-red-600 text-red-400 bg-red-950/50 font-bold"
-                  : "border-neutral-800 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
-              }`}
-              title="Lưới vi phạm 2x2 trực tiếp"
-            >
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Lưới 2x2</span>
-            </button>
-
             {/* Save layout & Restore saved layout */}
             <button
               onClick={saveCustomLayout}
@@ -645,11 +631,9 @@ export function LiveWall() {
           </div>
         </div>
 
-        {/* Grid or 2x2 Violation View */}
+        {/* Camera grid */}
         <div className="flex-1 overflow-y-auto pr-1">
-          {is2x2Grid ? (
-            <ViolationGrid2x2 />
-          ) : cameras.length === 0 ? (
+          {cameras.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center border border-dashed border-neutral-800 rounded-lg">
               <Monitor className="w-7 h-7 text-neutral-700 mb-2" />
               <p className="text-neutral-400 text-sm">{t("live.noCameras")}</p>
@@ -726,6 +710,7 @@ export function LiveWall() {
                         camera={camera}
                         activeEvent={activeEvents[camera.id]}
                         onClearEvent={() => clearCameraEvent(camera.id)}
+                        onOpenDetail={openEvent}
                         onVideoRef={registerVideo}
                         onResolution={(res) => handleResolution(camera.id, res)}
                       />

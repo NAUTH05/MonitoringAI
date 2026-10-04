@@ -47,6 +47,10 @@ export interface Camera {
   location: string;
   rtspUrl: string;
   subRtspUrl?: string;
+  /** Managed go2rtc stream name (internal — auto-generated, e.g. cam_<id>). */
+  streamName?: string;
+  /** URL the AI runtime consumes (derived from the stream). */
+  aiSourceUrl?: string;
   status: CameraStatus;
   isActive: boolean;
   lastHeartbeat?: string;
@@ -67,6 +71,21 @@ export interface Alert {
   event?: Event;
 }
 
+export type EvidenceType = 'IMAGE' | 'VIDEO';
+
+export interface Evidence {
+  id: string;
+  eventId: string;
+  type: EvidenceType;
+  url: string;
+  objectKey?: string;
+  sequence: number;
+  capturedAt: string;
+  durationMs?: number;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface Event {
   id: string;
   cameraId: string;
@@ -78,6 +97,9 @@ export interface Event {
   isAlert: boolean;
   camera: { id: string; name: string; location: string };
   alert?: Alert;
+  /** Evidence collection (ordered by sequence). An intrusion episode is ONE
+   *  event that accumulates annotated snapshots plus an optional video. */
+  evidence?: Evidence[];
   createdAt: string;
 }
 

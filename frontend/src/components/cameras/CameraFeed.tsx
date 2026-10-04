@@ -22,6 +22,8 @@ interface CameraFeedProps {
   camera: Camera;
   activeEvent?: Event | null;
   onClearEvent?: () => void;
+  /** Open the global event-detail dialog for the active realtime alert. */
+  onOpenDetail?: (event: Event) => void;
   // Expose the underlying <video> so the parent can snapshot/record it.
   onVideoRef?: (id: string, el: HTMLVideoElement | null) => void;
   onResolution?: (res: { width: number; height: number; aspectRatio: number }) => void;
@@ -41,6 +43,7 @@ export function CameraFeed({
   camera,
   activeEvent,
   onClearEvent,
+  onOpenDetail,
   onVideoRef,
   onResolution,
 }: CameraFeedProps) {
@@ -229,12 +232,22 @@ export function CameraFeed({
                   </p>
                 </div>
               </div>
-              <button
-                onClick={onClearEvent}
-                className="px-2 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-[10px] shrink-0"
-              >
-                OK
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {onOpenDetail && (
+                  <button
+                    onClick={() => onOpenDetail(activeEvent)}
+                    className="px-2 py-1 bg-neutral-900/80 hover:bg-neutral-800 text-white rounded text-[10px] border border-neutral-700"
+                  >
+                    {t("live.viewDetail")}
+                  </button>
+                )}
+                <button
+                  onClick={onClearEvent}
+                  className="px-2 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-[10px] shrink-0"
+                >
+                  OK
+                </button>
+              </div>
             </div>
           )}
         </div>

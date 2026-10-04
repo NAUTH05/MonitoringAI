@@ -26,10 +26,12 @@ class StatusServer:
         host: str,
         port: int,
         status_provider: Callable[[], dict],
-        jpeg_provider: Callable[[], Optional[bytes]],
+        jpeg_provider: Callable[[Optional[str]], Optional[bytes]],
         logger: logging.Logger,
         mjpeg_fps: float = 10.0,
     ) -> None:
+        # ``jpeg_provider(camera_id)`` -> latest annotated JPEG for that camera
+        # (``None`` = first available). Multi-camera: /preview.jpg?camera=<id>
         self.host = host
         self.port = port
         self.status_provider = status_provider
@@ -94,9 +96,18 @@ def _make_handler():
             except Exception:
                 return {"error": "status unavailable"}
 
+        def _camera_param(self):
+            if "?" not in self.path:
+                return None
+            from urllib.parse import parse_qs
+
+            query = parse_qs(self.path.split("?", 1)[1])
+            values = query.get("camera") or query.get("cameraId")
+            return values[0] if values else None
+
         def _jpeg(self):
             try:
-                return self.server.state["jpeg"]()  # type: ignore[attr-defined]
+                return self.server.state["jpeg"](self._camera_param())  # type: ignore[attr-defined]
             except Exception:
                 return None
 

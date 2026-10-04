@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertProvider } from "@/components/alerts/AlertProvider";
+import { EventDetailProvider } from "@/components/events/EventDetailProvider";
 import { I18nProvider } from "@/components/I18nProvider";
 import { LiveWall } from "@/components/live/LiveWall";
 import { Header } from "@/components/layout/Header";
@@ -47,22 +48,24 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AlertProvider>
-      <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <Header />
-          <main className="flex-1 overflow-auto p-6">
-            {/* LiveWall stays mounted across nav changes so camera streams
-                never tear down / reconnect. Only visibility toggles. */}
-            <div className={onLive ? "h-full" : "hidden h-full"}>
-              <LiveWall />
-            </div>
-            {!onLive && children}
-          </main>
+    <EventDetailProvider>
+      <AlertProvider>
+        <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+          <Sidebar />
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            <Header />
+            <main className="flex-1 overflow-auto p-6">
+              {/* LiveWall stays mounted across nav changes so camera streams
+                  never tear down / reconnect. Only visibility toggles. */}
+              <div className={onLive ? "h-full" : "hidden h-full"}>
+                <LiveWall />
+              </div>
+              {!onLive && children}
+            </main>
+          </div>
         </div>
-      </div>
-    </AlertProvider>
+      </AlertProvider>
+    </EventDetailProvider>
   );
 }
 

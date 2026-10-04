@@ -96,7 +96,7 @@
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"INTRUSION\",\n  \"confidence\": 0.95,\n  \"imageUrl\": \"/evidence/sample-intrusion.svg\",\n  \"videoUrl\": \"/evidence/TEST_CAM_1.mp4\"\n}"
+          "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"INTRUSION\",\n  \"confidence\": 0.95\n}"
         }
       }
     },
@@ -109,7 +109,7 @@
           { "key": "x-api-key", "value": "{{apiKey}}" }
         ],
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
-        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FIRE\",\n  \"confidence\": 0.9,\n  \"imageUrl\": \"/evidence/sample-fire.svg\"\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FIRE\",\n  \"confidence\": 0.9\n}" }
       }
     },
     {
@@ -121,7 +121,7 @@
           { "key": "x-api-key", "value": "{{apiKey}}" }
         ],
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
-        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"SMOKE\",\n  \"confidence\": 0.88,\n  \"imageUrl\": \"/evidence/sample-smoke.svg\"\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"SMOKE\",\n  \"confidence\": 0.88\n}" }
       }
     },
     {
@@ -133,7 +133,7 @@
           { "key": "x-api-key", "value": "{{apiKey}}" }
         ],
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
-        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"PPE\",\n  \"confidence\": 0.6,\n  \"imageUrl\": \"/evidence/sample-ppe.svg\"\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"PPE\",\n  \"confidence\": 0.6\n}" }
       }
     },
     {
@@ -145,7 +145,7 @@
           { "key": "x-api-key", "value": "{{apiKey}}" }
         ],
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
-        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FACE\",\n  \"confidence\": 0.7,\n  \"imageUrl\": \"/evidence/sample-face.svg\"\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"FACE\",\n  \"confidence\": 0.7\n}" }
       }
     },
     {
@@ -157,7 +157,7 @@
           { "key": "x-api-key", "value": "{{apiKey}}" }
         ],
         "url": { "raw": "{{baseUrl}}/events", "host": ["{{baseUrl}}"], "path": ["events"] },
-        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"VEHICLE\",\n  \"confidence\": 0.85,\n  \"imageUrl\": \"/evidence/sample-vehicle.svg\"\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"cameraId\": \"{{cameraId}}\",\n  \"eventType\": \"VEHICLE\",\n  \"confidence\": 0.85\n}" }
       }
     },
     {

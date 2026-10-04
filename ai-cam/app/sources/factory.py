@@ -1,10 +1,13 @@
-"""Build the configured frame source.
+"""Build a frame source for one camera.
 
-Supported ``CAMERA_SOURCE_TYPE`` values:
-    - ``webcam`` : built-in/attached camera by index (development)
-    - ``rtsp``   : direct IP camera / NVR RTSP URL (production target)
-    - ``go2rtc`` : the go2rtc re-stream, consumed over RTSP. Use this to share a
-                   single physical capture between MonitoringAI and AI-Cam.
+The source is chosen from the per-camera :class:`CameraRuntimeConfig`, not from
+global env. Two kinds exist:
+
+* ``rtsp``   — any network stream URL (direct IP camera, NVR channel, or the
+               go2rtc re-stream ``rtsp://<host>:8554/<stream>``). This is the
+               production path and is what the runtime-config endpoint supplies.
+* ``webcam`` — a device attached to the machine running AI-Cam (development
+               only). Used by the legacy single-camera fallback.
 """
 from __future__ import annotations
 
@@ -15,30 +18,27 @@ from .base import FrameSource
 from .opencv_source import OpenCvSource
 
 
-def create_source(settings: Settings, logger: logging.Logger) -> FrameSource:
-    source_type = settings.source_type
-    if source_type == "webcam":
+def create_source_for(runtime, settings: Settings, logger: logging.Logger) -> FrameSource:
+    """Build the frame source for one camera runtime config."""
+    if runtime.source_type == "webcam":
         return OpenCvSource(
             logger,
             kind="webcam",
-            device=settings.webcam_device,
+            device=runtime.webcam_device,
             backend=settings.webcam_backend,
             width=settings.webcam_width,
             height=settings.webcam_height,
             fps=settings.webcam_fps,
         )
-    if source_type in ("rtsp", "go2rtc", "http"):
-        if not settings.camera_url:
-            raise ValueError(
-                f"CAMERA_SOURCE_TYPE={source_type} requires CAMERA_URL to be set"
-            )
-        return OpenCvSource(
-            logger,
-            kind="rtsp",
-            url=settings.camera_url,
-            rtsp_transport=settings.rtsp_transport,
+
+    if not runtime.ai_source_url:
+        raise ValueError(
+            f"camera '{runtime.name}' has no ai source url "
+            "(set Camera.aiSourceUrl or streamName)"
         )
-    raise ValueError(
-        f"Unsupported CAMERA_SOURCE_TYPE='{source_type}'. "
-        "Use 'webcam', 'rtsp' or 'go2rtc'."
+    return OpenCvSource(
+        logger,
+        kind="rtsp",
+        url=runtime.ai_source_url,
+        rtsp_transport=settings.rtsp_transport,
     )

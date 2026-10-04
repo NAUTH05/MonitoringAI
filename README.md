@@ -133,30 +133,44 @@ Sao lưu database:
 pg_dump -U monitoring smart_monitoring > backup_$(date +%F).sql
 ```
 
-## Cài đặt local (dev)
+## Bắt đầu nhanh (local dev — Windows)
 
-```bash
-# Cần PostgreSQL đang chạy trên máy (localhost:5432)
+Hai script lo toàn bộ vòng đời local. **Không** cần mở 4 terminal và **không**
+cần sửa `go2rtc.yaml` hay biến `.env` cho từng camera.
 
-# Backend
-cd backend
-cp .env.example .env   # điền DATABASE_URL, JWT_SECRET, CAMERA_API_KEY
-npm install
-npm run db:push
-npm run db:seed
-npm run dev
+**Cài đặt một lần:**
 
-# Frontend (terminal khác)
-cd frontend
-cp .env.local.example .env.local
-npm install
-npm run dev
-
-# go2rtc (terminal khác) — Windows:
-./go2rtc.exe
-# Linux: tải binary từ GitHub releases
-./go2rtc
+```powershell
+.\scripts\setup-local.ps1 -Seed
 ```
+
+Kiểm tra toolchain (Node, Python venv, ffmpeg, go2rtc), tạo `.env` từ mẫu, cài
+`node_modules` còn thiếu và khởi tạo database (uỷ quyền cho
+`scripts/setup-postgres.ps1` — **không bao giờ xoá dữ liệu hiện có**).
+
+**Chạy hằng ngày:**
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+Khởi động go2rtc → backend → frontend → AI-Cam, chờ health check rồi in URL:
+
+| Dịch vụ | URL |
+|---|---|
+| MonitoringAI | http://localhost:3000 |
+| Backend | http://localhost:4000 |
+| go2rtc | http://localhost:1984 |
+| AI-Cam | http://localhost:8090 |
+
+**Dừng:**
+
+```powershell
+.\scripts\stop-local.ps1
+```
+
+Cần chạy tay từng dịch vụ hoặc cấu hình go2rtc thủ công? Xem
+[Advanced / Xử lý sự cố](#advanced--xử-lý-sự-cố).
 
 ## Windows Local PostgreSQL Setup
 
@@ -334,129 +348,109 @@ npm run db:reset     # xoá & tạo lại toàn bộ schema dev
 - Đổi `JWT_SECRET` và `CAMERA_API_KEY` trước khi lên production.
 - Script bootstrap không in ra mật khẩu.
 
-## Windows Local AI Development
+## Thêm camera & AI (workflow mới)
 
-Phần này mô tả cách chạy **AI-Cam cục bộ** trên laptop Windows 11 (GPU NVIDIA
-RTX 3050 Laptop 4 GB), dùng **webcam tích hợp** làm nguồn video phát triển và
-các model **đã được huấn luyện sẵn** trong `ai-cam/`. Hướng dẫn đầy đủ ở
-[`ai-cam/README.md`](ai-cam/README.md).
+Camera là **dữ liệu trong database**, không phải biến `.env`. Thêm một camera
+không cần sửa file nào và không cần restart dịch vụ AI.
 
-> **QUAN TRỌNG — phân biệt rõ 3 việc:**
-> - **TRAINING**: huấn luyện model — **KHÔNG** thực hiện ở đây. `vehicle_model.pt`,
->   `plate_model.pt`, `trocr_vn_plate_final/` là model đã train, không được sửa.
-> - **INFERENCE**: chạy suy luận thời gian thực — `ai-cam/main.py`.
-> - **TENSORRT EXPORT**: chuyển `.pt` → `.engine` cho riêng GPU này — chạy thủ
->   công qua `ai-cam/scripts/export_tensorrt.py`, **không** phải training.
+1. **Chạy dịch vụ** — `.\scripts\start-local.ps1`
+2. **Đăng nhập** dashboard tại http://localhost:3000
+3. **Add Camera** — nút thêm camera trên trang Cameras
+4. **Chọn nguồn hình** — một trong 4 loại (bảng dưới)
+5. **Test connection** — backend kiểm tra nguồn trước khi lưu
+6. **Chọn mô-đun AI** — ví dụ `Intrusion Detection`
+7. **Vẽ vùng cấm** — mở camera → module INTRUSION → vẽ ROI
+8. **Theo dõi cảnh báo** — sự kiện realtime + bằng chứng trong Event Detail
 
-### Yêu cầu
+### Các loại nguồn hình
 
-- Node.js 20, PostgreSQL 16 (đang chạy local), go2rtc (`go2rtc.exe` có sẵn).
-- Python 3.12 trong `ai-cam/.venv`.
-- PyTorch CUDA 12.8 + driver NVIDIA (kiểm tra bằng `nvidia-smi`).
-- FFmpeg (chỉ cần khi dùng go2rtc để chia sẻ webcam/transcode H265).
+| Loại | Người dùng nhập | Ghi chú |
+|---|---|---|
+| **IP Camera / RTSP** | URL RTSP (+ user/pass tuỳ chọn) | Cho camera IP hoặc NVR |
+| **Local Webcam** | Chọn thiết bị + độ phân giải + FPS | Thiết bị gắn vào **máy chạy go2rtc**; chỉ để phát triển |
+| **Existing go2rtc stream** | Chọn từ danh sách | Dùng lại luồng đã cấu hình |
+| **NVR / Advanced** | URL RTSP đầy đủ | Cấu hình chi tiết cho đầu ghi |
 
-### Kiểm tra GPU / PyTorch / model
+Backend tự sinh **tên stream nội bộ** (`cam_<uuid>`) — người dùng không bao giờ
+nhập tên stream hay chuỗi `ffmpeg:device?...`.
 
-```powershell
-cd ai-cam
-.\.venv\Scripts\python.exe scripts\check_gpu.py
-.\.venv\Scripts\python.exe scripts\test_models.py
+### Backend làm gì khi tạo camera (transaction)
+
+```
+Frontend -> Backend -> kiểm tra nguồn -> cấu hình go2rtc -> xác minh stream
+        -> lưu camera (streamName + aiSourceUrl) -> gán mô-đun AI
+        -> AI-Cam tự phát hiện
 ```
 
-`test_models.py` in ra tên lớp đọc trực tiếp từ model (vehicle:
-`{0: motorcycle, 1: car, 2: bus, 3: truck}`) và chạy thử OCR.
+Nếu go2rtc lỗi: **không** tạo camera hỏng, trả lỗi rõ ràng cho UI và dọn stream
+tạm. Sửa nguồn sẽ cập nhật đúng stream đó; xoá camera sẽ dọn stream do nó quản
+lý (chỉ khi không camera nào khác dùng).
 
-### Webcam
+### AI-Cam chạy nhiều camera
 
-```powershell
-.\.venv\Scripts\python.exe scripts\list_cameras.py   # liệt kê index/thiết bị
-```
+AI-Cam polling `GET /api/ai/runtime-config` (header `x-api-key`) và tự
+**thêm / bỏ / khởi động lại** worker theo từng camera — **không** restart cả
+dịch vụ khi thêm một camera. `.env` của AI-Cam chỉ còn cấu hình **cấp dịch vụ**
+(model path, device, storage, URL backend...).
 
-Không hardcode camera index 0 — cấu hình `WEBCAM_DEVICE` trong `ai-cam/.env`.
+## Advanced / Xử lý sự cố
 
-### go2rtc (chia sẻ 1 nguồn webcam cho cả MonitoringAI và AI-Cam)
+Chỉ dành cho cấu hình thủ công / gỡ lỗi. Quy trình thường ngày **không** cần.
 
-`go2rtc.yaml` đã có stream phát triển `laptop_webcam` (giữ nguyên `AMATA`):
+### Cấu hình go2rtc thủ công
+
+`go2rtc.yaml` chỉ nên chứa cấu hình cấp dịch vụ (`api.listen`, `rtsp.listen`,
+`ffmpeg.bin`). Stream do người dùng tạo được backend quản lý qua go2rtc API —
+**không** sửa YAML bằng tay.
 
 ```yaml
-streams:
-  laptop_webcam:
-    - "ffmpeg:device?video=0&resolution=1280x720&framerate=30#video=h264"
+api:
+  listen: ":1984"
+rtsp:
+  listen: ":8554"
+# ffmpeg:
+#   bin: C:\ffmpeg\bin\ffmpeg.exe
 ```
 
-Chạy `.\go2rtc.exe` (cần FFmpeg trên PATH). AI-Cam khi đó trỏ vào bản restream
-`rtsp://127.0.0.1:8554/laptop_webcam`. Nếu **chưa có FFmpeg**, dùng chế độ
-webcam trực tiếp của AI-Cam (không bật stream go2rtc) để tránh mở webcam 2 lần.
-
-### AI-Cam: cài đặt & chạy
-
-```powershell
-cd ai-cam
-Copy-Item .env.example .env
-.\scripts\init_aicam_db.ps1          # tạo database aicam (cần mật khẩu postgres)
-.\scripts\link_monitoring_camera.ps1 # tạo camera "Laptop Webcam" trong MonitoringAI
-.\scripts\run.ps1                    # chạy inference
-```
-
-Preview chẩn đoán (chạy được cả khi không có go2rtc/FFmpeg):
-`http://127.0.0.1:8090/` — status JSON tại `/status`, ảnh tại `/preview.jpg`.
-
-### Chạy toàn hệ thống (demo)
-
-| Terminal | Lệnh |
-|---|---|
-| 1 | `.\go2rtc.exe` |
-| 2 | `cd backend; npm run dev` |
-| 3 | `cd frontend; npm run dev` |
-| 4 | `cd ai-cam; .\scripts\run.ps1` |
-
-Hoặc dùng `.\start-manual.ps1` cho go2rtc/backend/frontend rồi chạy AI-Cam riêng.
-
-### Kiểm tra webcam
-
-```powershell
-cd ai-cam
-.\.venv\Scripts\python.exe scripts\list_cameras.py
-# hoặc xem overlay trực tiếp:
-.\.venv\Scripts\python.exe main.py   # rồi mở http://127.0.0.1:8090/
-```
-
-### Xuất TensorRT sau này (không phải training)
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install tensorrt onnx onnxslim onnxruntime-gpu
-.\.venv\Scripts\python.exe scripts\export_tensorrt.py --model all --imgsz 640
-```
-
-Engine tạo ra chỉ đúng cho RTX 3050 này — **không** dùng engine của VPS (RTX 5060 Ti).
-
-### Đổi webcam → camera IP RTSP
-
-Chỉ sửa cấu hình, không đổi pipeline AI:
+Muốn thêm luồng có sẵn (ví dụ `laptop_webcam`), dùng tab **go2rtc Streams** trên
+UI hoặc gọi thẳng go2rtc API:
 
 ```
-CAMERA_SOURCE_TYPE=rtsp
-CAMERA_URL=rtsp://user:password@192.168.1.10:554/Streaming/Channels/101
+PUT http://localhost:1984/api/streams?name=laptop_webcam&src=ffmpeg:device?video=0&resolution=1280x720&framerate=30#video=h264
 ```
 
-Hoặc thêm camera vào `go2rtc.yaml` rồi dùng `CAMERA_SOURCE_TYPE=go2rtc` với
-`rtsp://127.0.0.1:8554/<tên-stream>`.
+### Chế độ một camera (legacy)
+
+Đặt `AI_RUNTIME_CONFIG=false` trong `ai-cam/.env` để quay lại đọc nguồn từ
+`CAMERA_SOURCE_TYPE` / `CAMERA_URL` / `STREAM_ID` / `MONITORING_CAMERA_ID`.
+Chỉ dùng cho test offline hoặc demo cố định.
 
 ### Lỗi thường gặp
 
 | Lỗi | Cách xử lý |
 |---|---|
-| `CUDA available: False` | Cài lại torch bản cu128 (xem `ai-cam/README.md`) |
-| Không mở được webcam | Đổi `WEBCAM_DEVICE` / `WEBCAM_BACKEND=msmf` |
-| `database "aicam" does not exist` | Chạy `ai-cam\scripts\init_aicam_db.ps1` |
-| Trang biển số trống | Đặt `AICAM_DATABASE_URL` + `AICAM_EVENTS_DIR`, bỏ `MINIO_PUBLIC_URL` |
-| go2rtc webcam lỗi | Chưa cài FFmpeg (hoặc cấu hình `ffmpeg.bin`) |
+| `CUDA available: False` | Cài torch bản cu128 (xem `ai-cam/README.md`) |
+| Không tìm thấy thiết bị webcam | ffmpeg chưa có trên PATH của máy chạy backend |
+| `go2rtc rejected the source` | Kiểm tra URL RTSP / thiết bị, thử "Test connection" |
+| Stream không khả dụng | Nguồn chưa sẵn sàng — kiểm tra camera/NVR và go2rtc |
+| `database "aicam" does not exist` | Chạy `scripts\setup-postgres.ps1` |
 | Ảnh 404 trong UI | `AICAM_EVENTS_DIR` phải trùng `AI_CAM_STORAGE_DIR` |
+| Trang biển số trống | Đặt `AICAM_DATABASE_URL` + `AICAM_EVENTS_DIR` |
+
+### Xuất TensorRT (không phải training)
+
+```powershell
+cd ai-cam
+.\.venv\Scripts\python.exe -m pip install tensorrt onnx onnxslim onnxruntime-gpu
+.\.venv\Scripts\python.exe scripts\export_tensorrt.py --model all --imgsz 640
+```
+
+Engine chỉ đúng cho GPU hiện tại — **không** dùng engine của máy khác.
 
 ### RTX 3050 4 GB
 
-- Chỉ nạp model 1 lần (`ModelRegistry`); VRAM đo được ~250 MB.
-- `AI_PROCESSING_FPS=5` mặc định; suy luận ~25-30 ms/frame.
+- Chỉ nạp model 1 lần (`ModelRegistry`) và **chia sẻ** giữa các camera worker.
+- `AI_PROCESSING_FPS=5` mỗi camera; suy luận ~25-30 ms/frame.
 - Giữ `AI_USE_FP16=true` trên CUDA; giảm FPS/độ phân giải nếu thiếu VRAM.
 
 ## Intrusion Detection Development
@@ -531,43 +525,40 @@ File model bị **gitignore** (không commit binary); cách lấy lại xem
 
 ### Chạy từ zero → dashboard
 
-Thứ tự khởi động:
+```powershell
+.\scripts\setup-local.ps1 -Seed     # một lần
+.\scripts\start-local.ps1           # mỗi lần làm việc
+```
 
-| # | Terminal | Lệnh | Ghi chú |
-|---|---|---|---|
-| 0 | – | `powershell -ExecutionPolicy Bypass -File .\scripts\setup-postgres.ps1 -Seed -LinkDevCamera` | chạy một lần |
-| 1 | 1 | `.\go2rtc.exe` | chia sẻ webcam (single producer) |
-| 2 | 2 | `cd backend; npm run dev` | :4000 |
-| 3 | 3 | `cd frontend; npm run dev` | :3000 |
-| 4 | 4 | `cd ai-cam; .\.venv\Scripts\python.exe main.py` | task intrusion |
+Sau đó trong dashboard: **Add Camera** → chọn nguồn → **Test connection** → chọn
+mô-đun **Intrusion Detection** → vẽ vùng cấm. AI-Cam tự phát hiện camera mới qua
+`GET /api/ai/runtime-config` — **không** sửa `.env` cho từng camera.
 
-Cấu hình `ai-cam\.env` cho intrusion:
+`ai-cam/.env` chỉ còn cấu hình **cấp dịch vụ**:
 
 ```ini
-AI_TASK_NAME=intrusion
-CAMERA_SOURCE_TYPE=go2rtc
-CAMERA_URL=rtsp://127.0.0.1:8554/laptop_webcam
-STREAM_ID=laptop_webcam
 PERSON_MODEL_PATH=models/intrusion/person_model.pt
 PERSON_CONF_THRESH=0.35
 INTRUSION_OVERLAP_THRESHOLD=0.15
-AI_ROI_SOURCE=config
-AI_ROI_POLL_SECONDS=5
+INTRUSION_EVIDENCE_INTERVAL_SECONDS=3
+INTRUSION_RECORD_POSTROLL_SECONDS=5
+INTRUSION_RECORD_MAX_SECONDS=120
+AI_RUNTIME_CONFIG=true
 MONITORING_API_URL=http://localhost:4000/api
 MONITORING_API_KEY=demo-camera-key-change-me
-MONITORING_CAMERA_ID=<uuid camera "Laptop Webcam">
 ```
 
-> Chưa cài FFmpeg? Dùng `CAMERA_SOURCE_TYPE=webcam` + `WEBCAM_DEVICE=0` và **tắt**
-> stream `laptop_webcam` trong go2rtc (tránh mở webcam 2 lần).
+> Chạy tay từng dịch vụ trong 4 terminal vẫn được, và chế độ một camera (legacy)
+> vẫn tồn tại — xem [Advanced / Xử lý sự cố](#advanced--xử-lý-sự-cố).
 
 ### Vẽ & cập nhật ROI
 
 1. Dashboard → camera → module **INTRUSION** → mở hộp thoại vẽ ROI.
 2. Vẽ polygon → lưu → `PATCH /api/modules/camera/{cameraId}/{moduleId}/config`.
 3. Backend lưu `roiPolygon` (đã chuẩn hoá 0..1) vào `camera_modules.config` (PostgreSQL).
-4. AI-Cam polling `GET /api/cameras/{id}/ai-config` (header `x-api-key`) mỗi
-   `AI_ROI_POLL_SECONDS` → cập nhật ROI **không cần restart model**.
+4. AI-Cam nhận `roiPolygon` từ payload `GET /api/ai/runtime-config` (mỗi
+   `AI_RUNTIME_CONFIG_POLL_SECONDS`) → cập nhật ROI **không cần restart model**
+   và **không restart worker**.
 
 ROI lưu ở dạng **toạ độ chuẩn hoá** → không phụ thuộc độ phân giải; AI chuyển
 sang pixel bằng kích thước frame thật lúc suy luận.
@@ -642,6 +633,10 @@ curl -X POST http://<SERVER>/api/events \
 
 ## Cấu hình go2rtc (RTSP streams)
 
+> **Thường ngày bạn KHÔNG cần mục này.** Thêm camera qua UI (**Add Camera**) —
+> backend tự cấu hình go2rtc và sinh tên stream. Phần này chỉ dành cho cấu hình
+> thủ công / nâng cao.
+
 Sao chép `go2rtc.yaml.example` thành `go2rtc.yaml` và điền URL RTSP:
 
 ```yaml
@@ -661,6 +656,26 @@ Vào tab **go2rtc Streams** trên dashboard để thêm/sửa/xoá stream mà kh
 - Sub stream H264: nhập thẳng URL RTSP, nhẹ hơn.
 
 Lưu ý: khi go2rtc ghi lại file (lần thay đổi đầu tiên qua UI), nó chuẩn hoá format YAML và có thể xoá comment trong `go2rtc.yaml`. Đổi tên stream = xoá stream cũ rồi tạo mới.
+
+## Kiểm thử (tests)
+
+```powershell
+# AI-Cam (Python) — 84 bài
+cd ai-cam; .\.venv\Scripts\python.exe -m pytest tests -q
+
+# Backend (Node, không cần dependency mới)
+cd backend; npm test
+
+# Frontend (Node)
+cd frontend; npm test
+```
+
+Bao phủ: tỉ lệ bbox∩ROI + state machine, **evidence session** (1 event / snapshot
+3s / video post-roll / giới hạn 120s / nhiều camera độc lập), **multi-camera
+reconcile** (thêm / bỏ / disable / ROI cập nhật live không restart), **storage**
+(local ảnh + bytes + file, interface MinIO), **go2rtc orchestration** (sinh tên
+stream, build source, URL), **seed không tạo dữ liệu giả**, và các guard UI
+(không còn mock 2x2, event detail dùng chung, wizard đi qua `/cameras/provision`).
 
 ## User Roles
 

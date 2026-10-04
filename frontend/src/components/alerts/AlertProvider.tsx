@@ -1,5 +1,6 @@
 "use client";
 
+import { useEventDetail } from "@/components/events/EventDetailProvider";
 import { connectSocket, getSocket } from "@/lib/socket";
 import { formatDate } from "@/lib/utils";
 import { Alert, Event } from "@/types";
@@ -55,6 +56,7 @@ const textColors: Record<string, string> = {
 
 export function AlertProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
+  const { openEvent } = useEventDetail();
   const [toasts, setToasts] = useState<AlertPayload[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -138,7 +140,17 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto border rounded-xl p-3.5 max-w-sm shadow-2xl backdrop-blur-md transition duration-200 ${color}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => toast.event && openEvent(toast.event, toast.id)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && toast.event) {
+                  e.preventDefault();
+                  openEvent(toast.event, toast.id);
+                }
+              }}
+              title={t("alertToast.openDetail")}
+              className={`pointer-events-auto border rounded-xl p-3.5 max-w-sm shadow-2xl backdrop-blur-md transition duration-200 cursor-pointer hover:brightness-110 ${color}`}
             >
               <div className="flex items-start gap-3">
                 <div className={`mt-0.5 p-1.5 rounded-lg bg-neutral-950/50 flex-shrink-0 ${textColor}`}>
@@ -179,7 +191,11 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <button
-                  onClick={() => remove(toast.id)}
+                  onClick={(e) => {
+                    // Dismiss the toast ONLY — must not open the detail dialog.
+                    e.stopPropagation();
+                    remove(toast.id);
+                  }}
                   className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition flex-shrink-0"
                 >
                   <X className="w-4 h-4" />

@@ -1,15 +1,24 @@
-"""Evidence image storage.
+"""Evidence storage (images AND recorded video).
 
-``AI_CAM_STORAGE_MODE=local`` (default) writes JPEGs under
-``AI_CAM_STORAGE_DIR`` and returns a relative object key of the form
-``{stream_id}/{YYYY-MM-DD}/{event_id}.jpg``. That is the same key shape the
-production MinIO bucket uses, so MonitoringAI's ``/api/aicam-media/<key>``
-endpoint can serve it without any code change.
+The backend is abstract on purpose so the intrusion business logic never knows
+whether bytes land on local disk or in MinIO:
+
+    AI_CAM_STORAGE_MODE=local   -> files under AI_CAM_STORAGE_DIR   (default)
+    AI_CAM_STORAGE_MODE=minio   -> objects in a MinIO bucket        (optional)
+
+Object keys are portable and identical for both backends, e.g.::
+
+    <stream_id>/<YYYY-MM-DD>/<event_id>/image_0001.jpg
+    <stream_id>/<YYYY-MM-DD>/<event_id>/image_0002.jpg
+    <stream_id>/<YYYY-MM-DD>/<event_id>/evidence.mp4
+
+MonitoringAI's ``/api/aicam-media/<key>`` endpoint serves whatever key is stored,
+so switching backend requires no change to the AI task or the dashboard.
 """
 from __future__ import annotations
 
 import logging
-import os
+import shutil
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
@@ -28,13 +37,31 @@ def encode_jpeg(image_bgr: np.ndarray, quality: int = 90) -> bytes:
 
 
 class StorageBackend(ABC):
+    """Stores evidence artifacts and returns their relative object key."""
+
     @abstractmethod
-    def save(self, rel_path: str, image_bgr: np.ndarray) -> str:
-        """Persist an image and return its relative object key."""
+    def save_image(self, rel_path: str, image_bgr: np.ndarray) -> str:
+        """Persist a BGR image (JPEG) and return its relative object key."""
+
+    @abstractmethod
+    def save_bytes(
+        self, rel_path: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> str:
+        """Persist raw bytes (used for recorded video) and return the key."""
+
+    @abstractmethod
+    def save_file(
+        self, rel_path: str, local_path: Path, content_type: str = "application/octet-stream"
+    ) -> str:
+        """Persist a file already on local disk and return its key."""
 
     @abstractmethod
     def describe(self) -> dict:
         ...
+
+    # Backwards-compatible alias: the license-plate pipeline calls ``.save()``.
+    def save(self, rel_path: str, image_bgr: np.ndarray) -> str:
+        return self.save_image(rel_path, image_bgr)
 
 
 class LocalStorage(StorageBackend):
@@ -44,14 +71,30 @@ class LocalStorage(StorageBackend):
         self.quality = quality
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def save(self, rel_path: str, image_bgr: np.ndarray) -> str:
+    def _resolve(self, rel_path: str) -> Path:
         rel_path = rel_path.replace("\\", "/")
         full = self.root / rel_path
         full.parent.mkdir(parents=True, exist_ok=True)
+        return full
+
+    def save_image(self, rel_path: str, image_bgr: np.ndarray) -> str:
         data = encode_jpeg(image_bgr, self.quality)
+        return self.save_bytes(rel_path, data, content_type="image/jpeg")
+
+    def save_bytes(
+        self, rel_path: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> str:
+        full = self._resolve(rel_path)
         with open(full, "wb") as fh:
             fh.write(data)
-        return rel_path
+        return rel_path.replace("\\", "/")
+
+    def save_file(
+        self, rel_path: str, local_path: Path, content_type: str = "application/octet-stream"
+    ) -> str:
+        full = self._resolve(rel_path)
+        shutil.copyfile(str(local_path), str(full))
+        return rel_path.replace("\\", "/")
 
     def describe(self) -> dict:
         return {"mode": "local", "root": str(self.root)}
@@ -82,10 +125,23 @@ class MinioStorage(StorageBackend):
         if not self.client.bucket_exists(self.bucket):
             self.client.make_bucket(self.bucket)
 
-    def save(self, rel_path: str, image_bgr: np.ndarray) -> str:
+    def save_image(self, rel_path: str, image_bgr: np.ndarray) -> str:
         data = encode_jpeg(image_bgr, self.quality)
+        return self.save_bytes(rel_path, data, content_type="image/jpeg")
+
+    def save_bytes(
+        self, rel_path: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> str:
         self.client.put_object(
-            self.bucket, rel_path, BytesIO(data), length=len(data), content_type="image/jpeg"
+            self.bucket, rel_path, BytesIO(data), length=len(data), content_type=content_type
+        )
+        return rel_path
+
+    def save_file(
+        self, rel_path: str, local_path: Path, content_type: str = "application/octet-stream"
+    ) -> str:
+        self.client.fput_object(
+            self.bucket, rel_path, str(local_path), content_type=content_type
         )
         return rel_path
 

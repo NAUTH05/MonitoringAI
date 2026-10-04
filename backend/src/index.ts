@@ -18,6 +18,7 @@ if (!fs.existsSync(evidenceDir)) {
 
 import { startHeartbeatWatchdog } from './heartbeat';
 import { errorHandler } from './middleware/errorHandler';
+import aiRoutes from './routes/ai';
 import authRoutes from './routes/auth';
 import cameraRoutes from './routes/cameras';
 import captureRoutes from './routes/capture';
@@ -135,6 +136,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/layout', layoutRoutes);
 app.use('/api/license-plates', licensePlateRoutes);
+// Machine-to-machine AI runtime discovery (x-api-key). See ai-cam StreamManager.
+app.use('/api/ai', aiRoutes);
 
 app.use(errorHandler);
 

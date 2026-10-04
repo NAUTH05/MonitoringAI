@@ -97,6 +97,13 @@ class Settings:
     task_name: str
     processing_fps: float
 
+    # ── Multi-camera runtime ──────────────────────────────────────────────
+    #: Discover cameras from MonitoringAI (GET /api/ai/runtime-config) instead of
+    #: reading per-camera values from .env. Set false for the legacy single-camera
+    #: offline mode (one synthetic config built from the env below).
+    runtime_config_enabled: bool
+    runtime_config_poll_seconds: float
+
     # ── Models ────────────────────────────────────────────────────────────
     vehicle_model_path: Path
     plate_model_path: Path
@@ -136,6 +143,14 @@ class Settings:
     roi_file: Optional[Path]
     roi_polygon_inline: Optional[str]
     roi_poll_seconds: float
+
+    # ── Intrusion evidence session (one Event per episode) ────────────────
+    evidence_interval_seconds: float   # snapshot cadence while inside
+    record_postroll_seconds: float     # keep recording after the last exit
+    record_max_seconds: float          # hard cap on one recording
+    record_enabled: bool
+    record_source: Optional[str]       # override; default = camera_url
+    ffmpeg_bin: str
 
     # ── Storage ───────────────────────────────────────────────────────────
     storage_mode: str  # local | minio
@@ -180,6 +195,8 @@ class Settings:
             stream_id=(_env("STREAM_ID", "laptop_webcam") or "laptop_webcam").strip(),
             task_name=(_env("AI_TASK_NAME", "license_plate") or "license_plate").strip(),
             processing_fps=_env_float("AI_PROCESSING_FPS", 5.0),
+            runtime_config_enabled=_env_bool("AI_RUNTIME_CONFIG", True),
+            runtime_config_poll_seconds=_env_float("AI_RUNTIME_CONFIG_POLL_SECONDS", 10.0),
             vehicle_model_path=_env_path("VEHICLE_MODEL_PATH", "vehicle_model.pt"),
             plate_model_path=_env_path("PLATE_MODEL_PATH", "plate_model.pt"),
             vehicle_engine_path=_env_path("VEHICLE_ENGINE_PATH", "vehicle_model.engine"),
@@ -211,6 +228,12 @@ class Settings:
             roi_file=_env_path("AI_ROI_FILE", "data/roi.json"),
             roi_polygon_inline=_env("AI_ROI_POLYGON"),
             roi_poll_seconds=_env_float("AI_ROI_POLL_SECONDS", 5.0),
+            evidence_interval_seconds=_env_float("INTRUSION_EVIDENCE_INTERVAL_SECONDS", 3.0),
+            record_postroll_seconds=_env_float("INTRUSION_RECORD_POSTROLL_SECONDS", 5.0),
+            record_max_seconds=_env_float("INTRUSION_RECORD_MAX_SECONDS", 120.0),
+            record_enabled=_env_bool("INTRUSION_RECORD_ENABLED", True),
+            record_source=_env("INTRUSION_RECORD_SOURCE"),
+            ffmpeg_bin=(_env("FFMPEG_BIN", "ffmpeg") or "ffmpeg").strip(),
             storage_mode=(_env("AI_CAM_STORAGE_MODE", "local") or "local").strip().lower(),
             storage_dir=_env_path("AI_CAM_STORAGE_DIR", "data/events"),
             minio_endpoint=_env("MINIO_ENDPOINT"),
