@@ -69,6 +69,44 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/cameras/:id/ai-config  (called by the AI-Cam runtime, x-api-key auth)
+// Read-only, machine-to-machine: returns ONLY what the AI runtime needs to run
+// a task (stream URL + per-module runtime config such as the ROI polygon).
+// No user/account data and no secrets are exposed. The Python runtime never
+// logs in as a human user.
+router.get('/:id/ai-config', apiKeyAuth, async (req: Request, res: Response) => {
+  try {
+    const camera = await prisma.camera.findUnique({
+      where: { id: req.params.id },
+      include: { cameraModules: { include: { module: true } } },
+    });
+
+    if (!camera) {
+      res.status(404).json({ success: false, message: 'Camera not found' });
+      return;
+    }
+
+    const modules = camera.cameraModules.map((cm) => ({
+      code: cm.module.code,
+      enabled: cm.isEnabled,
+      config: cm.config ?? {},
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        cameraId: camera.id,
+        name: camera.name,
+        rtspUrl: camera.rtspUrl,
+        subRtspUrl: camera.subRtspUrl,
+        modules,
+      },
+    });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to build AI config' });
+  }
+});
+
 // GET /api/cameras/:id
 router.get('/:id', authenticate, async (req: Request, res: Response) => {
   try {

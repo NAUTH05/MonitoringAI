@@ -57,6 +57,36 @@ function getGo2RtcFrameUrl(streamName: string, key: number): string {
   return `${base}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&t=${key}`;
 }
 
+interface ContentBox {
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+}
+
+// object-contain geometry: the real video content does NOT always fill the
+// aspect-video container (a 4:3 / 21:9 stream is letterboxed). ROI coordinates
+// must be relative to the VIDEO CONTENT, not to the black padding, otherwise
+// the AI-Cam conversion (normalized * frame_width/height) would be wrong.
+function getContentBox(
+  cw: number,
+  ch: number,
+  video: { w: number; h: number } | null
+): ContentBox {
+  if (cw <= 0 || ch <= 0) return { x0: 0, y0: 0, w: cw, h: ch };
+  // Unknown resolution yet -> fall back to the container (legacy behaviour,
+  // identical for 16:9 streams, so existing ROI data stays valid).
+  if (!video || video.w <= 0 || video.h <= 0) return { x0: 0, y0: 0, w: cw, h: ch };
+  const containerAspect = cw / ch;
+  const videoAspect = video.w / video.h;
+  if (videoAspect >= containerAspect) {
+    const h = cw / videoAspect;
+    return { x0: 0, y0: (ch - h) / 2, w: cw, h };
+  }
+  const w = ch * videoAspect;
+  return { x0: (cw - w) / 2, y0: 0, w, h: ch };
+}
+
 export function RoiDrawerModal({
   camera,
   cameraModule,
@@ -76,6 +106,12 @@ export function RoiDrawerModal({
   const [snapshotKey, setSnapshotKey] = useState<number>(Date.now());
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState(false);
+
+  // Real decoded video size + measured container size, so ROI points are
+  // expressed in VIDEO CONTENT coordinates (object-contain), not container
+  // padding. Identical to the legacy behaviour for a 16:9 stream.
+  const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
 
   // Coordinates Inspection & Copy state
   const [showViewAllModal, setShowViewAllModal] = useState(false);
@@ -103,8 +139,27 @@ export function RoiDrawerModal({
       setSnapshotKey(Date.now());
       setShowViewAllModal(false);
       setCopiedFormat(null);
+      setVideoSize(null);
+      setSnapshotError(false);
     }
   }, [isOpen, cameraModule]);
+
+  // Track the container's real pixel size (letterboxing depends on it).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isOpen]);
+
+  // Where the actual video content sits inside the container (object-contain).
+  const contentBox = getContentBox(containerSize.w, containerSize.h, videoSize);
+  const videoAspect = videoSize ? videoSize.w / videoSize.h : null;
+  const isLetterboxed = !!videoAspect && Math.abs(videoAspect - 16 / 9) > 0.02;
 
   const refreshSnapshot = () => {
     setSnapshotLoading(true);
@@ -112,20 +167,22 @@ export function RoiDrawerModal({
     setSnapshotKey(Date.now());
   };
 
-  // Convert mouse event coordinates to normalized [0, 1]
+  // Convert mouse event coordinates to normalized [0, 1] relative to the
+  // VIDEO CONTENT (so a letterboxed stream maps correctly to the frame).
   const getNormalizedPoint = useCallback((e: React.MouseEvent<SVGSVGElement>): Point | null => {
     if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    const box = getContentBox(rect.width, rect.height, videoSize);
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left - box.x0) / box.w));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top - box.y0) / box.h));
 
     return {
       x: Math.round(x * 10000) / 10000,
       y: Math.round(y * 10000) / 10000,
     };
-  }, []);
+  }, [videoSize]);
 
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (showViewAllModal) return;
@@ -335,6 +392,24 @@ export function RoiDrawerModal({
                 </button>
               )}
 
+              {videoSize && (
+                <span
+                  className={`font-mono px-2 py-1 rounded-lg text-xs border ${
+                    isLetterboxed
+                      ? "bg-amber-950/80 border-amber-700/50 text-amber-300"
+                      : "bg-gray-800 border-gray-700 text-gray-300"
+                  }`}
+                  title={
+                    isLetterboxed
+                      ? "Luồng không phải 16:9 — tọa độ ROI được tính theo vùng nội dung video (đã bù letterbox)."
+                      : "Tọa độ ROI khớp trực tiếp với khung hình video."
+                  }
+                >
+                  {videoSize.w}×{videoSize.h}
+                  {isLetterboxed ? " • letterbox" : ""}
+                </span>
+              )}
+
               <span className="font-mono bg-blue-950/80 border border-blue-800/40 text-blue-300 px-2.5 py-1 rounded-lg text-xs font-semibold">
                 {points.length} điểm
               </span>
@@ -359,6 +434,7 @@ export function RoiDrawerModal({
                   streamName={streamName}
                   active={isOpen}
                   onState={setPlayerState}
+                  onResolution={(r) => setVideoSize({ w: r.width, h: r.height })}
                   className="w-full h-full object-contain bg-black"
                 />
                 {playerState !== "playing" && (
@@ -387,7 +463,13 @@ export function RoiDrawerModal({
                   <img
                     src={getGo2RtcFrameUrl(streamName, snapshotKey)}
                     alt="Camera Snapshot"
-                    onLoad={() => setSnapshotLoading(false)}
+                    onLoad={(e) => {
+                      setSnapshotLoading(false);
+                      const img = e.currentTarget;
+                      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                        setVideoSize({ w: img.naturalWidth, h: img.naturalHeight });
+                      }
+                    }}
                     onError={() => {
                       setSnapshotLoading(false);
                       setSnapshotError(true);
@@ -410,11 +492,18 @@ export function RoiDrawerModal({
               </div>
             )}
 
-            {/* SVG Drawing Layer with standard numeric viewBox 0 0 1000 1000 */}
+            {/* SVG Drawing Layer aligned to the VIDEO CONTENT (object-contain),
+                viewBox 0 0 1000 1000 mapped onto that content rect. */}
             <svg
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
-              className="absolute inset-0 w-full h-full z-10 touch-none"
+              className="absolute z-10 touch-none"
+              style={{
+                left: `${contentBox.x0}px`,
+                top: `${contentBox.y0}px`,
+                width: `${contentBox.w}px`,
+                height: `${contentBox.h}px`,
+              }}
               onClick={handleSvgClick}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}

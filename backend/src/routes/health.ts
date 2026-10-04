@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import os from 'os';
 import prisma from '../lib/prisma';
+import aicamPrisma from '../lib/aicamPrisma';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -25,6 +26,23 @@ router.get('/', authenticate, async (_req: Request, res: Response) => {
       dbStatus = 'ERROR';
     }
 
+    // AI-Cam database (separate DB for AI events). Never exposes the DSN.
+    let aicamDbStatus = 'OK';
+    try {
+      await aicamPrisma.$queryRaw`SELECT 1`;
+    } catch (error) {
+      console.error('AI-Cam Database Health Check Error:', error);
+      aicamDbStatus = 'ERROR';
+    }
+
+    // Required INTRUSION module present?
+    let intrusionModule = false;
+    try {
+      intrusionModule = !!(await prisma.aiModule.findUnique({ where: { code: 'INTRUSION' } }));
+    } catch {
+      intrusionModule = false;
+    }
+
     const uptimeSeconds = process.uptime();
     const uptimeHours = Math.floor(uptimeSeconds / 3600);
     const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
@@ -44,6 +62,12 @@ router.get('/', authenticate, async (_req: Request, res: Response) => {
         },
         database: {
           status: dbStatus,
+        },
+        aicamDatabase: {
+          status: aicamDbStatus,
+        },
+        modules: {
+          intrusion: intrusionModule,
         },
         timestamp: new Date().toISOString(),
       },

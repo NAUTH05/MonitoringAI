@@ -29,6 +29,7 @@ desktop.ini
 
 # ── Internal tools ────────────────────────────────────────────────────────────
 .claude
+.workbuddy-ai/
 markdown/
 *.jsonl
 *.jsonl_Zone.Identifier
@@ -44,3 +45,51 @@ start-manual.ps1
 /package-lock.json
 opencode.json
 *.sql
+
+# ── AI-Cam local runtime ──────────────────────────────────────────────────────
+# Never commit model binaries, TensorRT engines, OCR weights or the VPS snapshot
+# (it contains production paths/credentials). Application code IS committed.
+ai-cam/.venv/
+ai-cam/**/__pycache__/
+ai-cam/**/*.py[cod]
+ai-cam/.env
+ai-cam/data/
+ai-cam/logs/
+ai-cam/runs/
+ai-cam/*.log
+ai-cam/trocr_vn_plate_final/
+ai-cam/aicam_vps_snapshot_*.txt
+ai-cam/weights/
+ai-cam/output_images/
+
+# Model binaries anywhere under ai-cam (top-level AND nested, e.g. models/intrusion/)
+ai-cam/*.pt
+ai-cam/*.onnx
+ai-cam/*.engine
+ai-cam/*.trt
+ai-cam/**/*.pt
+ai-cam/**/*.onnx
+ai-cam/**/*.engine
+ai-cam/**/*.trt
+
+# ── Intrusion dataset ─────────────────────────────────────────────────────────
+# Keep the structure (data.yaml, README, .gitkeep) but never commit the data.
+ai-cam/datasets/**/*.jpg
+ai-cam/datasets/**/*.jpeg
+ai-cam/datasets/**/*.png
+ai-cam/datasets/**/*.bmp
+ai-cam/datasets/**/*.webp
+ai-cam/datasets/**/*.txt
+ai-cam/datasets/**/*.json
+ai-cam/datasets/**/*.mp4
+ai-cam/datasets/**/*.avi
+ai-cam/datasets/**/*.mkv
+ai-cam/datasets/**/*.mov
+ai-cam/datasets/_pool/
+
+# ── Generated evidence (runtime captures / recordings) ───────────────────────
+backend/evidence/
+
+# The root `*.sql` rule ignores DB dumps; allow the AI-Cam schema/scripts.
+!ai-cam/sql/
+!ai-cam/sql/*.sql

@@ -1,0 +1,25 @@
+# AI-Cam runtime dependencies.
+#
+# For the RTX 3050 install CUDA PyTorch from the CUDA 12.8 index FIRST:
+#   pip install --index-url https://download.pytorch.org/whl/cu128 torch torchvision
+# then install the rest:
+#   pip install -r requirements.txt
+
+ultralytics>=8.3
+numpy
+opencv-python
+Pillow
+transformers
+torch
+torchvision
+psycopg2-binary
+
+# ── Optional: free/open-source local storage alternative to MinIO ────────────
+# minio
+
+# ── Optional: TensorRT export tooling (scripts/export_tensorrt.py) ───────────
+# Install versions matching your CUDA build.
+# tensorrt
+# onnx
+# onnxslim
+# onnxruntime-gpu

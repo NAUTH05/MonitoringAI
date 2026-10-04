@@ -1,0 +1,25 @@
+# INTRUSION person-detector dataset (Ultralytics YOLO format).
+#
+# ONE class only: person. There is NO "intrusion" class — intrusion is a
+# runtime state derived from a detected person entering the ROI polygon.
+#
+# Layout:
+#   images/{train,val,test}/*.jpg   (+ matching labels/{split}/<stem>.txt)
+#   labels/{train,val,test}/<stem>.txt
+#
+# Label line format (YOLO detection):
+#   <class> <x_center> <y_center> <width> <height>     all normalized 0..1
+#
+# A label file may be EMPTY (0 bytes) to declare a "negative" frame (no
+# person). That is allowed and encouraged.
+#
+# `path` is overridden at runtime by scripts/train_person_detector.py with the
+# absolute dataset directory, so this relative value only documents intent.
+path: .
+train: images/train
+val: images/val
+test: images/test
+
+nc: 1
+names:
+  0: person
