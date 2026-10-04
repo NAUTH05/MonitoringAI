@@ -72,11 +72,30 @@ export interface Go2rtcResult {
   error?: string;
 }
 
+/**
+ * Read (and discard) a fetch response body.
+ *
+ * ALWAYS drain a response — never return straight after `fetch()`. An
+ * unconsumed body leaves undici's HTTP parser paused; when the socket is then
+ * reused or closed the parser throws `assert(!this.paused)` from a socket
+ * callback. That assertion is NOT catchable around the `fetch()` call and
+ * crashes the entire Node process. (Observed live: the backend died seconds
+ * after a go2rtc call.)
+ */
+async function drain(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch {
+    return '';
+  }
+}
+
 export async function listStreams(): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(`${go2rtcApiBase()}/api/streams`);
+    const text = await drain(res); // consume before any early return
     if (!res.ok) return null;
-    return (await res.json()) as Record<string, unknown>;
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -91,7 +110,8 @@ export async function putStream(name: string, src: string): Promise<Go2rtcResult
   try {
     const url = `${go2rtcApiBase()}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(src)}`;
     const res = await fetch(url, { method: 'PUT' });
-    if (!res.ok) return { ok: false, error: (await res.text()) || `go2rtc responded ${res.status}` };
+    const text = await drain(res); // consume on BOTH paths
+    if (!res.ok) return { ok: false, error: text || `go2rtc responded ${res.status}` };
     return { ok: true };
   } catch (err) {
     return { ok: false, error: `Unable to reach go2rtc: ${(err as Error).message}` };
@@ -102,7 +122,8 @@ export async function deleteStream(name: string): Promise<Go2rtcResult> {
   try {
     const url = `${go2rtcApiBase()}/api/streams?src=${encodeURIComponent(name)}`;
     const res = await fetch(url, { method: 'DELETE' });
-    if (!res.ok) return { ok: false, error: (await res.text()) || `go2rtc responded ${res.status}` };
+    const text = await drain(res); // consume on BOTH paths
+    if (!res.ok) return { ok: false, error: text || `go2rtc responded ${res.status}` };
     return { ok: true };
   } catch (err) {
     return { ok: false, error: `Unable to reach go2rtc: ${(err as Error).message}` };
@@ -113,15 +134,24 @@ export async function deleteStream(name: string): Promise<Go2rtcResult> {
 export async function probeStream(name: string, timeoutMs = 8000): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response | undefined;
   try {
-    const res = await fetch(
+    res = await fetch(
       `${go2rtcApiBase()}/api/frame.jpeg?src=${encodeURIComponent(name)}`,
       { signal: controller.signal },
     );
-    if (!res.ok) return false;
-    const type = res.headers.get('content-type') || '';
-    return type.includes('image');
+    const ok = res.ok && (res.headers.get('content-type') || '').includes('image');
+    // Drain the single JPEG frame — checking headers alone leaves the body
+    // unconsumed and can crash the process (see `drain` above).
+    await res.arrayBuffer().catch(() => undefined);
+    return ok;
   } catch {
+    // Aborted / unreachable: release the body explicitly as well.
+    try {
+      await res?.body?.cancel();
+    } catch {
+      /* already released */
+    }
     return false;
   } finally {
     clearTimeout(timer);

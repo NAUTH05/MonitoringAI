@@ -24,11 +24,13 @@ router.post('/:streamName/snapshot', authenticate, authorize('Admin', 'Manager',
   const streamName = req.params.streamName;
   try {
     const upstream = await fetch(`${GO2RTC_API_URL}/api/frame.jpeg?src=${encodeURIComponent(streamName)}`);
+    // Always consume the body BEFORE any early return: leaving a fetch response
+    // unconsumed can trip undici's `assert(!this.paused)` and kill the process.
+    const buf = Buffer.from(await upstream.arrayBuffer());
     if (!upstream.ok) {
       res.status(502).json({ success: false, message: `go2rtc snapshot failed (${upstream.status})` });
       return;
     }
-    const buf = Buffer.from(await upstream.arrayBuffer());
     const filename = `snap_${safe(streamName)}_${stamp()}.jpg`;
     fs.writeFileSync(path.join(evidenceDir, filename), buf);
     res.json({ success: true, data: { url: `/evidence/${filename}` } });
