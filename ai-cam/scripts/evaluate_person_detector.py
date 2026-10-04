@@ -9,12 +9,19 @@ Modes
                      report how many intrusion events would fire.
 ``--webcam``         laptop webcam (``--device-index``), same as video.
 
+The live preview (``cv2.imshow``) draws the ROI polygon and, for every detected
+person, the bbox, the track id, the confidence and the **ROI overlap percentage**
+— so you can see exactly why someone triggers.
+
+``--roi`` accepts BOTH an inline JSON string and a path to a JSON file::
+
 Usage::
 
     .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --metrics
-    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --image frame.jpg --roi roi.json
-    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --video clip.mp4 --roi roi.json --save-out out.mp4
-    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --webcam
+    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --image frame.jpg --roi .\\roi-test.json
+    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --webcam --roi '[{"x":0.2,"y":0.2},{"x":0.8,"y":0.2},{"x":0.8,"y":0.8}]'
+    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --video clip.mp4 --roi .\\roi-test.json --save-out out.mp4
+    .\\.venv\\Scripts\\python.exe scripts\\evaluate_person_detector.py --webcam --overlap-threshold 0.30
 """
 from __future__ import annotations
 
@@ -29,12 +36,42 @@ DEFAULT_DATASET = AI_CAM_DIR / "datasets" / "intrusion_person"
 DEFAULT_MODEL = AI_CAM_DIR / "models" / "intrusion" / "person_model.pt"
 
 
-def _load_roi(path: str | None):
+def _load_roi(value: str | None):
+    """Parse ``--roi`` which may be EITHER an inline JSON string OR a file path.
+
+    Accepted forms::
+
+        --roi '[{"x":0.2,"y":0.2},{"x":0.8,"y":0.2},{"x":0.8,"y":0.8}]'
+        --roi '{"roiPolygon":[...]}'
+        --roi .\\roi-test.json          (file containing any of the above)
+
+    Returns the normalized polygon or ``None``.
+    """
     from app.tasks.intrusion.geometry import normalize_polygon
 
-    if not path:
+    if not value:
         return None
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    text = value.strip()
+
+    data = None
+    # 1) inline JSON (starts with '[' or '{')
+    if text[:1] in ("[", "{"):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            data = None
+    # 2) otherwise treat it as a file path
+    if data is None:
+        path = Path(text)
+        if not path.exists():
+            print(f"ERROR: --roi is neither valid inline JSON nor an existing file: {value}")
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            print(f"ERROR: cannot parse ROI JSON from {path}: {exc}")
+            return None
+
     if isinstance(data, dict) and "roiPolygon" in data:
         data = data["roiPolygon"]
     return normalize_polygon(data)
@@ -76,34 +113,78 @@ def run_stream(task, source_desc: str, cap, roi, save_out: Path | None) -> int:
     max_persons = 0
     events = 0
     t0 = time.time()
-    while True:
-        ok, frame = cap.read()
-        if not ok or frame is None:
-            break
-        frames += 1
-        result = task.process(frame)
-        max_persons = max(max_persons, result.get("count", 0))
-        if result.get("violation"):
-            events += 1
-        annotated = task.annotate(frame, result)
-        if save_out is not None:
-            if writer is None:
-                h, w = annotated.shape[:2]
-                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                writer = cv2.VideoWriter(str(save_out), fourcc, 20.0, (w, h))
-            writer.write(annotated)
-        if frames % 30 == 0:
-            print(f"  frame {frames}: persons={result.get('count',0)} "
-                  f"violations={events}")
+
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+
+            frames += 1
+
+            result = task.process(frame)
+
+            max_persons = max(max_persons, result.get("count", 0))
+
+            if result.get("violation"):
+                events += 1
+
+            # Frame đã có:
+            # - ROI polygon
+            # - person bbox
+            # - Track ID + confidence
+            # - ROI overlap % (lý do vì sao trigger)
+            # - ENTERING / INTRUSION
+            annotated = task.annotate(frame, result)
+
+            # LIVE PREVIEW
+            cv2.imshow("INTRUSION - Live Preview", annotated)
+
+            # Q hoặc ESC để thoát
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), 27):
+                break
+
+            if save_out is not None:
+                if writer is None:
+                    h, w = annotated.shape[:2]
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    writer = cv2.VideoWriter(
+                        str(save_out),
+                        fourcc,
+                        20.0,
+                        (w, h),
+                    )
+
+                writer.write(annotated)
+
+            if frames % 30 == 0:
+                print(
+                    f"  frame {frames}: "
+                    f"persons={result.get('count', 0)} "
+                    f"violations={events}"
+                )
+
+    finally:
+        cap.release()
+
+        if writer is not None:
+            writer.release()
+
+        cv2.destroyAllWindows()
 
     dt = time.time() - t0
-    if writer is not None:
-        writer.release()
-    print(f"\n{source_desc}: {frames} frames in {dt:.1f}s "
-          f"({frames/max(dt,1e-6):.1f} fps) | max persons/frame={max_persons} | "
-          f"intrusion events={events}")
+
+    print(
+        f"\n{source_desc}: {frames} frames in {dt:.1f}s "
+        f"({frames / max(dt, 1e-6):.1f} fps) | "
+        f"max persons/frame={max_persons} | "
+        f"intrusion events={events}"
+    )
+
     if save_out is not None:
         print(f"  annotated output -> {save_out}")
+
     return 0
 
 
@@ -117,9 +198,16 @@ def main() -> int:
     parser.add_argument("--video", help="video file to test")
     parser.add_argument("--webcam", action="store_true", help="use the laptop webcam")
     parser.add_argument("--device-index", type=int, default=0)
-    parser.add_argument("--roi", help="ROI polygon JSON (list of {x,y} or {'roiPolygon':[...]})")
+    parser.add_argument(
+        "--roi",
+        help="ROI polygon: inline JSON ('[{...}]' / '{\"roiPolygon\":[...]}') OR a .json file path",
+    )
     parser.add_argument("--save-out", help="save annotated image/video here")
     parser.add_argument("--conf", type=float, default=0.35)
+    parser.add_argument(
+        "--overlap-threshold", type=float, default=0.15,
+        help="min bbox/ROI overlap ratio to count as inside (0.0..1.0)",
+    )
     args = parser.parse_args()
 
     sys.path.insert(0, str(AI_CAM_DIR))
@@ -149,7 +237,8 @@ def main() -> int:
         plate_model_path=AI_CAM_DIR / "plate_model.pt",
         plate_engine_path=AI_CAM_DIR / "plate_model.engine",
         trocr_model_dir=AI_CAM_DIR / "trocr_vn_plate_final",
-        person_conf=args.conf, min_inside_frames=3, intrusion_dwell_ms=1000,
+        person_conf=args.conf, overlap_threshold=args.overlap_threshold,
+        min_inside_frames=3, intrusion_dwell_ms=1000,
         event_cooldown_ms=5000, roi_exit_frames=5, track_lost_frames=30,
         roi_polygon_inline=json.dumps(roi) if roi else None,
     )

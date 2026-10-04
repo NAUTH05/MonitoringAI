@@ -465,28 +465,64 @@ Module **INTRUSION** phát hiện **người** đi vào vùng ROI do người d�
 dashboard. Nguyên tắc thiết kế (bám sát yêu cầu):
 
 - **Không huấn luyện lớp "intrusion".** Model chỉ phát hiện lớp `person`.
-  "Xâm nhập" là **trạng thái runtime**: người được track đi vào polygon ROI.
+  "Xâm nhập" là **trạng thái runtime**: người được track có **bounding box
+  chồng lên** polygon ROI.
+- **Quyết định dựa trên BBOX chồng ROI, KHÔNG dựa vào điểm chân.** Điểm chân
+  (bottom-center) không đáng tin với camera xa/cao (công trường, cột điện) khi
+  bàn chân không nhìn thấy.
 - **Tách bạch**: phát hiện người (`app/tasks/intrusion/task.py`) tách khỏi logic
   nghiệp vụ ROI (`geometry.py` + `state.py`).
 - **Không sửa** module biển số / `vehicle_model.pt` / `plate_model.pt` / TrOCR.
+
+### Cách xác định xâm nhập (bbox ∩ ROI)
+
+```
+roiOverlap = area(person_bbox ∩ roi_polygon) / area(person_bbox)
+insideRoi  = roiOverlap >= INTRUSION_OVERLAP_THRESHOLD
+```
+
+- Mẫu số là **diện tích bbox của người** — **không** phải diện tích ROI và
+  **không** dùng IoU với cả ROI (ROI có thể chiếm phần lớn khung hình).
+- ROI là polygon tuỳ ý (kể cả **không lồi**): rasterize bằng `cv2.fillPoly` thành
+  mask nhị phân, crop theo bbox rồi đếm pixel. Mask được **cache**, chỉ dựng lại
+  khi ROI hoặc kích thước frame thay đổi.
+- Ví dụ: bbox 10.000 px, 3.000 px nằm trong ROI → `roiOverlap = 0.30`.
+
+**Vì sao không dùng điểm chân?** Với camera xa/cao (công trường, hạ tầng điện
+lực), người rất nhỏ trong khung, bị che khuất, hoặc bàn chân ngoài khung → điểm
+chân nằm ngoài ROI dù cả người đã ở trong vùng cấm. Tỉ lệ bbox chồng ROI ổn định
+hơn nhiều trong các tình huống này.
+
+#### Tinh chỉnh `INTRUSION_OVERLAP_THRESHOLD` (0.0 .. 1.0)
+
+| Giá trị | Ý nghĩa |
+|---|---|
+| `0.05` | Rất nhạy — kích hoạt khi người vừa chạm vào ROI |
+| `0.15` | **Mặc định khuyến nghị** |
+| `0.30` | Cần một phần đáng kể thân người vào ROI |
+| `0.50` | Cần khoảng một nửa bbox nằm trong ROI |
 
 ### Kiến trúc
 
 ```
 ai-cam/app/tasks/intrusion/
-├── geometry.py   # normalize_polygon, polygon_to_pixel, foot_point, point_in_polygon
+├── geometry.py   # normalize_polygon, polygon_to_pixel, build_roi_mask,
+│                 # box_roi_overlap_ratio, RoiMaskCache  (foot_point: chỉ để debug)
 ├── state.py      # IntrusionTracker: OUTSIDE→ENTERING→INSIDE→EXITED + dwell/cooldown
-└── task.py       # IntrusionTask: YOLO person + ByteTrack → ROI → event
+└── task.py       # IntrusionTask: YOLO person + ByteTrack → bbox∩ROI → event
 ```
 
 Luồng runtime mỗi frame:
 
 ```
 frame → person detector (YOLO) → bbox → ByteTrack (track ID)
-      → điểm chân (bottom-center) → pointPolygonTest(ROI)
+      → roiOverlap = bbox ∩ ROI  (mask, polygon tuỳ ý)
+      → insideRoi = roiOverlap >= INTRUSION_OVERLAP_THRESHOLD
       → debounce (min_inside_frames) + dwell (dwell_ms) + cooldown
       → sự kiện INTRUSION (một lần cho mỗi lần vào ROI đã xác nhận)
 ```
+
+Payload mỗi detection: `{trackId, box, confidence, roiOverlap, insideRoi, state}`.
 
 `AI_TASK_NAME=intrusion` chọn task này. Có thể dùng ngay model COCO
 `models/intrusion/person_model.pt` (lớp 0 = person) — **không cần train** để chạy.
@@ -514,6 +550,7 @@ CAMERA_URL=rtsp://127.0.0.1:8554/laptop_webcam
 STREAM_ID=laptop_webcam
 PERSON_MODEL_PATH=models/intrusion/person_model.pt
 PERSON_CONF_THRESH=0.35
+INTRUSION_OVERLAP_THRESHOLD=0.15
 AI_ROI_SOURCE=config
 AI_ROI_POLL_SECONDS=5
 MONITORING_API_URL=http://localhost:4000/api
@@ -572,8 +609,10 @@ cd ai-cam
 .\.venv\Scripts\python.exe -m pytest tests -q
 ```
 
-Bao phủ: điểm trong/ngoài/trên cạnh polygon, chuẩn hoá→pixel, ROI rỗng, < 3 điểm,
-vào/ở/ra, bắn sự kiện một lần, cooldown.
+Bao phủ: tỉ lệ chồng bbox∩ROI (ngoài=0, trong≈1, 50%≈0.5, chạm cạnh≈0, dưới/đúng/
+trên ngưỡng, polygon không lồi, bbox bị cắt bởi biên frame, ROI rỗng/không hợp lệ,
+bbox nhỏ), chuẩn hoá→pixel, vào/ở/ra, bắn sự kiện một lần, cooldown, và trường hợp
+**chân ngoài ROI nhưng thân người chồng ROI vẫn kích hoạt**.
 
 ### Bảo mật
 

@@ -123,6 +123,8 @@ class Settings:
 
     # ── Intrusion (person + ROI) ──────────────────────────────────────────
     person_conf: float
+    #: Fraction of the person bbox that must overlap the ROI (0.0 .. 1.0).
+    overlap_threshold: float
     min_inside_frames: int
     intrusion_dwell_ms: int
     event_cooldown_ms: int
@@ -199,6 +201,7 @@ class Settings:
             min_plate_aspect=_env_float("MIN_PLATE_ASPECT", 0.15),
             max_plate_aspect=_env_float("MAX_PLATE_ASPECT", 8.0),
             person_conf=_env_float("PERSON_CONF_THRESH", 0.35),
+            overlap_threshold=min(1.0, max(0.0, _env_float("INTRUSION_OVERLAP_THRESHOLD", 0.15))),
             min_inside_frames=_env_int("INTRUSION_MIN_INSIDE_FRAMES", 3),
             intrusion_dwell_ms=_env_int("INTRUSION_DWELL_MS", 1000),
             event_cooldown_ms=_env_int("INTRUSION_EVENT_COOLDOWN_MS", 5000),

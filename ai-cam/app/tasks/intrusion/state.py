@@ -18,6 +18,9 @@ ROI. Instead each ByteTrack track id carries a small state machine::
 * ``event_cooldown_ms`` is an additional guard against rapid re-fires on the
   same track.
 
+The single boolean fed in per track is ``bbox∩ROI overlap ratio >= threshold``
+(see :mod:`app.tasks.intrusion.geometry`); this module never looks at points.
+
 This module is pure Python (no numpy/cv2/models) so it is fully unit-testable.
 """
 from __future__ import annotations
@@ -39,16 +42,24 @@ class IntrusionConfig:
     """Runtime thresholds — all configurable, no magic constants in the task."""
 
     person_conf: float = 0.35
+    #: Minimum fraction of the person bbox that must overlap the ROI before the
+    #: person counts as "inside" for the state machine. See INTRUSION_OVERLAP_THRESHOLD.
+    overlap_threshold: float = 0.15
     min_inside_frames: int = 3
     intrusion_dwell_ms: int = 1000
     event_cooldown_ms: int = 5000
     roi_exit_frames: int = 5
     track_lost_frames: int = 30
 
+    def __post_init__(self) -> None:
+        # Keep the overlap threshold inside [0.0, 1.0] no matter how it was supplied.
+        self.overlap_threshold = min(1.0, max(0.0, float(self.overlap_threshold)))
+
     @classmethod
     def from_settings(cls, settings) -> "IntrusionConfig":
         return cls(
             person_conf=float(settings.person_conf),
+            overlap_threshold=float(getattr(settings, "overlap_threshold", 0.15)),
             min_inside_frames=int(settings.min_inside_frames),
             intrusion_dwell_ms=int(settings.intrusion_dwell_ms),
             event_cooldown_ms=int(settings.event_cooldown_ms),
@@ -97,9 +108,10 @@ class IntrusionTracker:
     ) -> Dict[int, Decision]:
         """Advance every observed track by one frame.
 
-        ``observations`` maps ``track_id -> foot_point_inside_roi``.
-        Returns ``track_id -> Decision`` for the observed tracks only.
-        Stale tracks (not seen for ``track_lost_frames``) are pruned.
+        ``observations`` maps ``track_id -> inside_roi``, where ``inside_roi`` is
+        ``roi_overlap_ratio >= overlap_threshold`` (bbox∩ROI overlap — NOT a foot
+        point test). Returns ``track_id -> Decision`` for the observed tracks
+        only. Stale tracks (not seen for ``track_lost_frames``) are pruned.
         """
         decisions: Dict[int, Decision] = {}
         for track_id, inside in observations.items():

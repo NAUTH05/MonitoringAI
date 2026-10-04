@@ -9,10 +9,15 @@ derived by this task:
     frame
       -> person YOLO (COCO 'person' class, or a custom single-class model)
       -> ByteTrack persistent tracking
-      -> bottom-center ground-contact point per track
-      -> point-in-polygon against the configured ROI (normalized -> pixel)
+      -> per-track person bounding box
+      -> bbox ∩ ROI overlap ratio (mask-based, arbitrary polygons)
+      -> insideRoi = roiOverlap >= INTRUSION_OVERLAP_THRESHOLD
       -> per-track state machine (debounce / dwell / cooldown)
       -> one INTRUSION event per confirmed entry
+
+The decision is the fraction of the person's BOUNDING BOX that overlaps the ROI
+— NOT the bottom-center foot point — so it works on distant / elevated CCTV
+(construction sites, utility poles) where the feet may not be visible.
 
 Camera acquisition is owned by ``app.sources``; this task only receives ready
 frames via :meth:`process`.
@@ -29,13 +34,12 @@ import numpy as np
 from ...config import Settings
 from ..base import BaseTask
 from .geometry import (
+    RoiMaskCache,
     clamp_box,
-    foot_point,
     normalize_polygon,
-    point_in_polygon,
     polygon_to_pixel,
 )
-from .state import Decision, IntrusionConfig, IntrusionTracker, TrackState
+from .state import IntrusionConfig, IntrusionTracker, TrackState
 
 # BGR colours
 _COLOR_NEUTRAL = (170, 170, 170)   # person outside the ROI
@@ -48,8 +52,8 @@ class IntrusionTask(BaseTask):
     name = "intrusion"
     event_type = "INTRUSION"
     description = (
-        "Person YOLO + ByteTrack -> bottom-center foot point -> ROI polygon "
-        "test -> per-track debounce/dwell -> one INTRUSION event per entry."
+        "Person YOLO + ByteTrack -> person bbox/ROI overlap ratio -> per-track "
+        "debounce/dwell -> one INTRUSION event per entry."
     )
 
     def __init__(
@@ -65,6 +69,9 @@ class IntrusionTask(BaseTask):
         self.roi_provider = roi_provider
         self.config = IntrusionConfig.from_settings(settings)
         self.tracker = IntrusionTracker(self.config)
+        # Caches ONE rasterized ROI mask, rebuilt only when the ROI polygon or
+        # the decoded frame size changes (never per person / per frame).
+        self._roi_mask = RoiMaskCache()
 
         self._frame_idx = 0
         self._person_class: Optional[int] = None
@@ -90,10 +97,10 @@ class IntrusionTask(BaseTask):
             self._person_class = 0
         self.logger.info(
             "IntrusionTask ready | person_class=%s person_conf=%.2f "
-            "min_inside_frames=%d dwell_ms=%d cooldown_ms=%d roi_points=%s",
-            self._person_class, self.config.person_conf, self.config.min_inside_frames,
-            self.config.intrusion_dwell_ms, self.config.event_cooldown_ms,
-            len(self._current_roi() or []),
+            "overlap_threshold=%.2f min_inside_frames=%d dwell_ms=%d cooldown_ms=%d roi_points=%s",
+            self._person_class, self.config.person_conf, self.config.overlap_threshold,
+            self.config.min_inside_frames, self.config.intrusion_dwell_ms,
+            self.config.event_cooldown_ms, len(self._current_roi() or []),
         )
 
     # ── inference ─────────────────────────────────────────────────────────
@@ -112,7 +119,8 @@ class IntrusionTask(BaseTask):
         h, w = frame.shape[:2]
 
         roi_norm = self._current_roi()
-        roi_px = polygon_to_pixel(roi_norm, w, h) if roi_norm else None
+        # Update the cached ROI mask (rebuilt only when ROI / frame size changes).
+        self._roi_mask.set_polygon(roi_norm)
 
         try:
             results = self.registry.person_model.track(
@@ -139,16 +147,17 @@ class IntrusionTask(BaseTask):
                 clean = clamp_box(box, w, h)
                 if clean is None:
                     continue
-                fx, fy = foot_point(clean)
-                inside = point_in_polygon((fx, fy), roi_px)
+                # INTRUSION decision = fraction of the person bbox inside the ROI.
+                overlap = self._roi_mask.overlap_ratio(clean, w, h)
+                inside = overlap >= self.config.overlap_threshold
                 observations[int(track_id)] = inside
                 detections.append(
                     {
                         "trackId": int(track_id),
                         "box": [int(v) for v in clean],
                         "confidence": round(float(conf), 3),
+                        "roiOverlap": round(float(overlap), 3),
                         "insideRoi": bool(inside),
-                        "footPoint": [round(fx, 1), round(fy, 1)],
                     }
                 )
 
@@ -197,13 +206,14 @@ class IntrusionTask(BaseTask):
                 color, tag = _COLOR_NEUTRAL, ""
 
             cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
-            label = f"ID {det['trackId']}  {det['confidence']:.0%}"
+            # Show WHY the person triggered: ID, confidence and ROI overlap %.
+            label = (
+                f"ID {det['trackId']}  {det['confidence']:.0%}"
+                f" | ROI {det.get('roiOverlap', 0.0):.0%}"
+            )
             if tag:
                 label = f"{tag}  {label}"
             _put_label(out, label, x1, y1, color)
-
-            fx, fy = det["footPoint"]
-            cv2.circle(out, (int(fx), int(fy)), 5, color, -1, cv2.LINE_AA)
 
         if result.get("new_violations"):
             _put_banner(out, "INTRUSION DETECTED", _COLOR_INTRUSION)
@@ -221,7 +231,7 @@ class IntrusionTask(BaseTask):
         return {
             "confidence": float(det.get("confidence", 0.0)),
             "track_id": det.get("trackId"),
-            "foot_point": det.get("footPoint"),
+            "roi_overlap": det.get("roiOverlap"),
             "roi_points": len(result.get("roi", [])),
         }
 
@@ -243,7 +253,7 @@ class IntrusionTask(BaseTask):
                 "task": self.name,
                 "event_type": self.event_type,
                 "track_id": fields.get("track_id"),
-                "foot_point": fields.get("foot_point"),
+                "roi_overlap": fields.get("roi_overlap"),
                 "confidence": fields.get("confidence"),
                 "image_key": image_key,
                 "thumbnail_key": thumbnail_key,
@@ -269,6 +279,7 @@ class IntrusionTask(BaseTask):
         return {
             "roi": self._current_roi(),
             "roi_source": self.roi_provider.describe() if self.roi_provider else None,
+            "overlap_threshold": self.config.overlap_threshold,
             "active_tracks": len(self.tracker.active_track_ids()),
         }
 

@@ -133,6 +133,24 @@ Key settings (see `.env.example` for the full list and explanations):
 These guards exist because the production logs showed Transformers warnings
 from extremely small/malformed plate crops.
 
+### Intrusion thresholds (task `intrusion`)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PERSON_CONF_THRESH` | `0.35` | person detection confidence |
+| `INTRUSION_OVERLAP_THRESHOLD` | `0.15` | min **bbox∩ROI overlap ratio** to count as inside (0.0..1.0). `0.05` = very sensitive, `0.15` = recommended, `0.30` = significant body, `0.50` = ~half the bbox |
+| `INTRUSION_MIN_INSIDE_FRAMES` | `3` | debounce: consecutive inside frames before confirming |
+| `INTRUSION_DWELL_MS` | `1000` | minimum dwell inside the ROI (ms) |
+| `INTRUSION_EVENT_COOLDOWN_MS` | `5000` | min time between events for the SAME track |
+| `INTRUSION_ROI_EXIT_FRAMES` | `5` | consecutive outside frames before a track is re-armed (EXITED) |
+| `INTRUSION_TRACK_LOST_FRAMES` | `30` | frames without a track before its state is dropped |
+| `AI_ROI_SOURCE` | `config` | `config` = poll backend ai-config; `static` = offline file/inline |
+| `AI_ROI_POLL_SECONDS` | `5` | ROI re-read interval (live ROI edit, no model restart) |
+
+`INTRUSION_OVERLAP_THRESHOLD` is the knob that matters most: the intrusion
+decision is `roiOverlap >= INTRUSION_OVERLAP_THRESHOLD`, where `roiOverlap` is the
+fraction of the person bbox inside the ROI (never the foot point).
+
 ## 3. AI-Cam database
 
 License-plate data is read by MonitoringAI from the **separate `aicam`
@@ -314,6 +332,11 @@ cameras.
 > `app/tasks/intrusion/` (see [`../README.md`](../README.md) → *Intrusion
 > Detection Development*). Detection and ROI business logic are deliberately
 > separate.
+>
+> The runtime decides "inside the ROI" from the **fraction of the person's
+> bounding box that overlaps the ROI polygon** (`roiOverlap >=
+> INTRUSION_OVERLAP_THRESHOLD`, default `0.15`) — **not** from the bottom-center
+> foot point, which is unreliable on distant/elevated CCTV.
 
 ### 1. Where the data comes from
 
@@ -402,9 +425,15 @@ never fabricate a dataset or pretend training happened.
 .\.venv\Scripts\python.exe scripts\evaluate_person_detector.py --image test.jpg
 .\.venv\Scripts\python.exe scripts\evaluate_person_detector.py --webcam `
     --roi '[{"x":0.1,"y":0.2},{"x":0.8,"y":0.2},{"x":0.8,"y":0.8}]'
+.\.venv\Scripts\python.exe scripts\evaluate_person_detector.py --webcam `
+    --roi .\roi-test.json --overlap-threshold 0.30
 ```
 
-Judge the model on precision/recall/mAP, **not** on training loss alone.
+`--roi` accepts **both** an inline JSON string **and** a path to a JSON file
+(containing `[{x,y}, ...]` or `{"roiPolygon": [...]}`). The live `cv2.imshow`
+preview draws the ROI polygon and, for every detected person, the bbox, track id,
+confidence and the **ROI overlap percentage** — so you can see exactly why someone
+triggers. Judge the model on precision/recall/mAP, **not** on training loss alone.
 
 ### 8. Deploy
 

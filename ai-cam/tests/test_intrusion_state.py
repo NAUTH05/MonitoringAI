@@ -90,3 +90,10 @@ def test_reset_clears_state():
     t.tick(1, 0, {1: True})
     t.reset()
     assert t.active_track_ids() == []
+
+
+def test_overlap_threshold_default_and_clamp():
+    assert IntrusionConfig().overlap_threshold == 0.15
+    assert IntrusionConfig(overlap_threshold=0.15).overlap_threshold == 0.15
+    assert IntrusionConfig(overlap_threshold=1.5).overlap_threshold == 1.0
+    assert IntrusionConfig(overlap_threshold=-0.2).overlap_threshold == 0.0

@@ -15,11 +15,18 @@ Coordinate contract (must stay identical to the MonitoringAI ROI editor)
       px = normalized_x * frame_width
       py = normalized_y * frame_height
 
-* A person's ground-contact point is the BOTTOM-CENTER of its bounding box
-  (restricted zones represent areas on the *ground*, not the bbox centre)::
+* The INTRUSION decision is based on how much of the person's **bounding box**
+  overlaps the ROI polygon::
 
-      foot_x = (x1 + x2) / 2
-      foot_y = y2
+      roi_overlap_ratio = area(person_bbox ∩ roi_polygon) / area(person_bbox)
+
+  The denominator is the **PERSON BBOX** area — never the ROI area, and never
+  IoU against the whole ROI — because the ROI may cover a large part of the
+  frame. This is robust for distant / elevated CCTV (construction sites, utility
+  poles, occluded or tiny people) where the feet are often not visible.
+
+* ``foot_point`` (bottom-center) is kept ONLY as an optional diagnostic helper.
+  It must **never** decide whether a person has entered the ROI.
 
 Everything in this module is pure (no models, no I/O) so it can be unit-tested
 without a GPU or a neural network.
@@ -95,7 +102,11 @@ def polygon_to_pixel(
 
 
 def foot_point(box: Iterable[float]) -> Point:
-    """Ground-contact point of a bbox ``[x1, y1, x2, y2]``: bottom-center."""
+    """Ground-contact point of a bbox ``[x1, y1, x2, y2]``: bottom-center.
+
+    DIAGNOSTIC ONLY. The intrusion decision uses :func:`box_roi_overlap_ratio`,
+    never this point — feet are frequently invisible on distant/elevated CCTV.
+    """
     x1, y1, x2, y2 = (float(v) for v in box)
     return ((x1 + x2) / 2.0, y2)
 
@@ -138,3 +149,95 @@ def clamp_box(box: Iterable[float], width: int, height: int) -> Optional[Tuple[i
     if x2 <= x1 or y2 <= y1:
         return None
     return x1, y1, x2, y2
+
+
+# ── bbox ∩ ROI overlap (the intrusion decision) ───────────────────────────────
+def build_roi_mask(
+    polygon_px: Optional[np.ndarray], width: int, height: int
+) -> Optional[np.ndarray]:
+    """Rasterize a pixel polygon into a binary (0/255) ROI mask.
+
+    Uses ``cv2.fillPoly`` so **arbitrary polygons — including non-convex ones —
+    are supported**. Returns ``None`` when the polygon is invalid/empty or the
+    frame size is degenerate (an "empty ROI" means "no restricted zone").
+    """
+    if polygon_px is None or len(polygon_px) < MIN_POLYGON_POINTS:
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    mask = np.zeros((height, width), dtype=np.uint8)
+    pts = polygon_px.reshape(-1, 1, 2).astype(np.int32)
+    cv2.fillPoly(mask, [pts], 255)
+    return mask
+
+
+def box_roi_overlap_ratio(
+    box: Iterable[float],
+    roi_mask: Optional[np.ndarray],
+    width: int,
+    height: int,
+) -> float:
+    """Fraction of the person bbox area that lies inside the ROI mask.
+
+    ``roi_overlap_ratio = pixels(person_bbox ∩ roi) / pixels(person_bbox)``
+
+    * The denominator is the **person bbox** area (not the ROI area, not IoU).
+    * The bbox is clamped to the frame first, so a box partly outside the frame
+      is handled safely; the clamped bbox area is the denominator.
+    * Returns ``0.0`` for an empty/invalid ROI, a degenerate bbox, or an empty
+      crop. Never raises for tiny / edge-touching boxes.
+    """
+    if roi_mask is None:
+        return 0.0
+    clean = clamp_box(box, width, height)
+    if clean is None:
+        return 0.0
+    x1, y1, x2, y2 = clean
+    crop = roi_mask[y1:y2, x1:x2]
+    area = float(crop.size)
+    if area <= 0.0:
+        return 0.0
+    inside = float(cv2.countNonZero(crop))
+    return inside / area
+
+
+class RoiMaskCache:
+    """Caches the rasterized ROI mask; rebuilds only when ROI or size changes.
+
+    Building a full-resolution mask separately for every person on every frame
+    is wasteful, so this keeps ONE mask and reuses it while both the ROI polygon
+    and the decoded frame size stay the same. Call :meth:`set_polygon` once per
+    frame (cheap: it only invalidates when the polygon actually changed).
+    """
+
+    def __init__(self, polygon: Optional[Sequence[Point]] = None) -> None:
+        self._polygon: Optional[Tuple[Point, ...]] = None
+        self._mask: Optional[np.ndarray] = None
+        self._size: Tuple[int, int] = (0, 0)
+        self.set_polygon(polygon)
+
+    def set_polygon(self, polygon: Optional[Sequence[Point]]) -> None:
+        """Update the ROI polygon; invalidate the mask only if it changed."""
+        norm = tuple(polygon) if polygon else None
+        if norm != self._polygon:
+            self._polygon = norm
+            self._mask = None
+            self._size = (0, 0)
+
+    @property
+    def polygon(self) -> Optional[List[Point]]:
+        return list(self._polygon) if self._polygon else None
+
+    def mask(self, width: int, height: int) -> Optional[np.ndarray]:
+        """Return the cached ROI mask for this frame size (building if needed)."""
+        if self._polygon is None:
+            return None
+        if self._mask is None or self._size != (width, height):
+            px = polygon_to_pixel(self._polygon, width, height)
+            self._mask = build_roi_mask(px, width, height)
+            self._size = (width, height)
+        return self._mask
+
+    def overlap_ratio(self, box: Iterable[float], width: int, height: int) -> float:
+        """Convenience wrapper: overlap of ``box`` with the cached ROI mask."""
+        return box_roi_overlap_ratio(box, self.mask(width, height), width, height)
