@@ -22,6 +22,7 @@ param(
     [switch]$NoBrowser,
     [switch]$SkipAiCam,
     [switch]$SkipFrontend,
+    [switch]$SkipPostgres,
     [int]$TimeoutSeconds = 60
 )
 
@@ -62,7 +63,26 @@ Write-Host "MonitoringAI - starting local stack" -ForegroundColor White
 
 # ── preflight ─────────────────────────────────────────────────────────────
 Write-Head "Preflight"
-if (Test-Port 5432) { Write-Ok "PostgreSQL is running" } else { Write-Warn2 "PostgreSQL not reachable on 5432 - start it first" }
+if ($SkipPostgres) {
+    Write-Warn2 "PostgreSQL check skipped (-SkipPostgres)"
+} elseif (Test-Port 5432) {
+    Write-Ok "PostgreSQL is running"
+} else {
+    Write-Warn2 "PostgreSQL is not listening on 5432 - trying to start it"
+    $pgScript = Join-Path $PSScriptRoot "postgres.ps1"
+    if (Test-Path $pgScript) {
+        & powershell -ExecutionPolicy Bypass -File $pgScript -Action start
+        if ($LASTEXITCODE -eq 2) {
+            Write-Warn2 "PostgreSQL needs Administrator. Run this script from an admin shell, or:"
+            Write-Host "          .\scripts\postgres.ps1 start" -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Warn2 "scripts\postgres.ps1 not found - start PostgreSQL manually"
+    }
+    if (-not (Test-Port 5432)) {
+        Write-Warn2 "Backend will fail to connect until PostgreSQL is up"
+    }
+}
 
 foreach ($pkg in @("backend", "frontend")) {
     if (-not (Test-Path (Join-Path $root "$pkg\node_modules"))) {

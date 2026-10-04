@@ -166,8 +166,23 @@ Khởi động go2rtc → backend → frontend → AI-Cam, chờ health check r�
 **Dừng:**
 
 ```powershell
-.\scripts\stop-local.ps1
+.\scripts\stop-local.ps1                    # dừng app, GIỮ PostgreSQL
+.\scripts\stop-local.ps1 -IncludePostgres   # dừng cả PostgreSQL (cần Admin)
 ```
+
+**PostgreSQL** là Windows service — điều khiển cần **quyền Administrator**:
+
+```powershell
+.\scripts\postgres.ps1 status     # xem trạng thái (KHÔNG cần Admin)
+.\scripts\postgres.ps1 start      # cần Admin
+.\scripts\postgres.ps1 stop       # cần Admin
+.\scripts\postgres.ps1 restart    # cần Admin
+```
+
+`start-local.ps1` tự gọi `postgres.ps1 start` khi cổng 5432 chưa mở; nếu bạn chưa
+mở PowerShell bằng Admin, nó in ra đúng lệnh cần chạy (mã thoát `2` = cần Admin).
+
+**Chạy bằng PM2** (thay cho 4 cửa sổ)? Xem [Chạy bằng PM2](#chạy-bằng-pm2-pm2).
 
 Cần chạy tay từng dịch vụ hoặc cấu hình go2rtc thủ công? Xem
 [Advanced / Xử lý sự cố](#advanced--xử-lý-sự-cố).
@@ -397,6 +412,27 @@ dịch vụ khi thêm một camera. `.env` của AI-Cam chỉ còn cấu hình *
 
 Chỉ dành cho cấu hình thủ công / gỡ lỗi. Quy trình thường ngày **không** cần.
 
+### Chạy bằng PM2 (pm2)
+
+Thay vì 4 cửa sổ, chạy cả stack dưới PM2 — tự khởi động lại khi crash, log tập trung:
+
+```powershell
+npm i -g pm2                              # một lần
+pm2 start ecosystem.local.config.js       # go2rtc + backend + frontend + AI-Cam
+pm2 logs                                  # log tất cả dịch vụ
+pm2 logs monitoring-backend               # log một dịch vụ
+pm2 restart monitoring-backend            # sau khi sửa code
+pm2 stop ecosystem.local.config.js        # dừng app
+pm2 delete ecosystem.local.config.js      # xoá khỏi danh sách
+pm2 save                                  # lưu danh sách
+```
+
+- **PostgreSQL vẫn là Windows service** — PM2 không quản lý được. Dùng
+  `.\scripts\postgres.ps1 start` / `stop` (cần Admin).
+- PM2 **tự restart** tiến trình bị crash (`max_restarts: 10`).
+- `ecosystem.config.js` (cũ) dành cho **Linux production** (`dist/index.js` +
+  `next start`, phải build trước). `ecosystem.local.config.js` dành cho **dev Windows**.
+
 ### Cấu hình go2rtc thủ công
 
 `go2rtc.yaml` chỉ nên chứa cấu hình cấp dịch vụ (`api.listen`, `rtsp.listen`,
@@ -436,6 +472,9 @@ Chỉ dùng cho test offline hoặc demo cố định.
 | `database "aicam" does not exist` | Chạy `scripts\setup-postgres.ps1` |
 | Ảnh 404 trong UI | `AICAM_EVENTS_DIR` phải trùng `AI_CAM_STORAGE_DIR` |
 | Trang biển số trống | Đặt `AICAM_DATABASE_URL` + `AICAM_EVENTS_DIR` |
+| Backend không kết nối được DB | `.\scripts\postgres.ps1 status` rồi `start` (cần Admin) |
+| Không start/stop được PostgreSQL | Cần mở PowerShell bằng **Administrator** |
+| Backend tự thoát / "AssertionError" | Đã sửa (fetch body chưa đọc) — PM2 sẽ tự restart nếu còn gặp |
 
 ### Xuất TensorRT (không phải training)
 
