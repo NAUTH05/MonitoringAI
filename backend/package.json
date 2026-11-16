@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "test": "node -r ts-node/register/transpile-only --test tests/go2rtc.test.ts tests/go2rtc-fetch.test.ts tests/seed-safety.test.ts",
+    "test": "node -r ts-node/register/transpile-only --test tests/go2rtc.test.ts tests/go2rtc-fetch.test.ts tests/seed-safety.test.ts tests/ai-time.test.ts tests/ai-crypto.test.ts tests/ai-intent.test.ts tests/ai-search-helpers.test.ts tests/telegram.test.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
@@ -14,6 +14,7 @@
     "db:reset": "prisma db push --force-reset && ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@google/genai": "^3.0.0",
     "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",

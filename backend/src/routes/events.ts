@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { authenticate, apiKeyAuth } from '../middleware/auth';
+import { telegramDispatcher } from '../services/telegram';
 
 const router = Router();
 
@@ -145,6 +146,23 @@ router.post('/', apiKeyAuth, async (req: Request, res: Response) => {
         include: { event: { include: { camera: { select: { id: true, name: true, location: true } } } } },
       });
       io.emit('new-alert', alert);
+
+      // Telegram fan-out. Deliberately NOT awaited: the AI-Cam ingest request
+      // must return at HTTP speed and must never fail because Telegram is slow,
+      // rate-limited or down. `enqueueAlert` persists PENDING delivery rows and
+      // swallows its own errors; the background worker sends them.
+      void telegramDispatcher
+        .enqueueAlert({
+          id: event.id,
+          eventType: event.eventType,
+          confidence: event.confidence,
+          timestamp: event.timestamp,
+          isAlert: event.isAlert,
+          imageUrl: event.imageUrl,
+          videoUrl: event.videoUrl,
+          camera: event.camera,
+        })
+        .catch(() => undefined);
     }
 
     res.status(201).json({ success: true, data: event });

@@ -17,6 +17,7 @@ export const openapiSpec = {
     { name: 'Modules' },
     { name: 'Reports' },
     { name: 'Health' },
+    { name: 'Telegram', description: 'Quản lý bot Telegram và lịch sử gửi cảnh báo (chỉ Admin).' },
   ],
   components: {
     securitySchemes: {
@@ -257,6 +258,186 @@ export const openapiSpec = {
     },
     '/api/health': {
       get: { tags: ['Health'], summary: 'Tình trạng hệ thống', responses: { 200: { description: 'OK' } } },
+    },
+
+    // ── Telegram (Admin only) ────────────────────────────────────────────────
+    // Token bot KHÔNG bao giờ được trả về: response chỉ có `tokenMasked`.
+    '/api/telegram/status': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Trạng thái cấu hình (đã có TELEGRAM_ENCRYPTION_KEY chưa)',
+        responses: { 200: { description: 'OK' }, 403: { description: 'Không phải Admin' } },
+      },
+    },
+    '/api/telegram/bots': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Danh sách bot (token đã che)',
+        responses: { 200: { description: 'OK' }, 403: { description: 'Không phải Admin' } },
+      },
+      post: {
+        tags: ['Telegram'],
+        summary: 'Thêm bot — xác thực token với Telegram getMe rồi mã hoá và lưu',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'token'],
+                properties: {
+                  name: { type: 'string', example: 'Security Operations' },
+                  token: { type: 'string', example: '123456789:AAH...' },
+                  isEnabled: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Đã tạo' },
+          400: { description: 'Token sai/không hợp lệ' },
+          409: { description: 'Trùng tên hoặc trùng bot' },
+        },
+      },
+    },
+    '/api/telegram/bots/{id}': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Chi tiết 1 bot',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' }, 404: { description: 'Không tìm thấy' } },
+      },
+      patch: {
+        tags: ['Telegram'],
+        summary: 'Sửa bot (đổi tên / thay token / bật-tắt). Token rỗng = giữ nguyên',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' }, 400: { description: 'Token mới không hợp lệ' } },
+      },
+      delete: {
+        tags: ['Telegram'],
+        summary: 'Xoá bot (kèm người nhận, quy tắc và lịch sử gửi)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' }, 404: { description: 'Không tìm thấy' } },
+      },
+    },
+    '/api/telegram/bots/{id}/verify': {
+      post: {
+        tags: ['Telegram'],
+        summary: 'Xác thực lại token (getMe). Token bị thu hồi sẽ tự tắt bot',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' }, 400: { description: 'Token bị từ chối' }, 502: { description: 'Telegram lỗi' } },
+      },
+    },
+    '/api/telegram/bots/{id}/test': {
+      post: {
+        tags: ['Telegram'],
+        summary: 'Gửi tin nhắn thử (tới 1 người nhận hoặc tất cả người nhận đang bật)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Đã gửi' }, 207: { description: 'Một phần thất bại' } },
+      },
+    },
+    '/api/telegram/bots/{id}/updates': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Liệt kê chat bot vừa nhận tin nhắn (getUpdates)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' }, 502: { description: 'Telegram lỗi' } },
+      },
+    },
+    '/api/telegram/bots/{id}/recipients': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Danh sách người nhận của bot',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+      post: {
+        tags: ['Telegram'],
+        summary: 'Thêm người nhận (chat ID)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 201: { description: 'Đã tạo' }, 409: { description: 'Chat ID đã tồn tại cho bot này' } },
+      },
+    },
+    '/api/telegram/recipients/{recipientId}': {
+      patch: {
+        tags: ['Telegram'],
+        summary: 'Sửa người nhận (tên / chat ID / bật-tắt)',
+        parameters: [{ name: 'recipientId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+      delete: {
+        tags: ['Telegram'],
+        summary: 'Xoá người nhận',
+        parameters: [{ name: 'recipientId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+    },
+    '/api/telegram/recipients/{recipientId}/test': {
+      post: {
+        tags: ['Telegram'],
+        summary: 'Gửi tin nhắn thử tới 1 người nhận',
+        parameters: [{ name: 'recipientId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Đã gửi' }, 207: { description: 'Gửi thất bại' } },
+      },
+    },
+    '/api/telegram/bots/{id}/rules': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Quy tắc thông báo theo loại sự kiện',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'OK' } },
+      },
+      put: {
+        tags: ['Telegram'],
+        summary: 'Ghi đè toàn bộ quy tắc thông báo của bot',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['rules'],
+                properties: {
+                  rules: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['eventType', 'isEnabled'],
+                      properties: {
+                        eventType: {
+                          type: 'string',
+                          enum: ['INTRUSION', 'FIRE', 'SMOKE', 'PPE', 'FACE', 'VEHICLE', 'FLOOD', 'TRAFFIC_VIOLATION'],
+                        },
+                        isEnabled: { type: 'boolean' },
+                        minConfidence: { type: 'number', minimum: 0, maximum: 1, nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'OK' }, 400: { description: 'Loại sự kiện/ngưỡng không hợp lệ' } },
+      },
+    },
+    '/api/telegram/delivery-logs': {
+      get: {
+        tags: ['Telegram'],
+        summary: 'Lịch sử gửi (lọc theo bot, trạng thái, loại sự kiện, khoảng ngày)',
+        parameters: [
+          { name: 'botId', in: 'query', schema: { type: 'string' } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING', 'PROCESSING', 'SENT', 'FAILED', 'SKIPPED'] } },
+          { name: 'eventType', in: 'query', schema: { type: 'string' } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 25, maximum: 100 } },
+        ],
+        responses: { 200: { description: 'OK' } },
+      },
     },
   },
 } as const;

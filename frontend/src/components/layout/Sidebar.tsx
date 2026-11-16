@@ -11,6 +11,7 @@ import {
   Monitor,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   Shield,
   Users,
   Car,
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/users", labelKey: "nav.users", icon: Users },
   { href: "/reports", labelKey: "nav.reports", icon: BarChart3 },
   { href: "/health", labelKey: "nav.health", icon: Activity },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 export function Sidebar() {

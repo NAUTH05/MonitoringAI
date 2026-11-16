@@ -17,6 +17,7 @@ Hệ thống giám sát camera AI - dark mode dashboard với realtime alerts.
 
 - Dashboard realtime, quản lý camera, AI modules, events và reports.
 - Quản lý stream go2rtc bằng UI (tab **go2rtc Streams**): thêm/sửa/xoá link RTSP trực tiếp trên web, không cần sửa tay file `go2rtc.yaml`. Thao tác đi qua backend proxy có xác thực JWT (xem/thêm/sửa: Admin & Manager, xoá: Admin).
+- **Cảnh báo Telegram** (tab **Settings → Telegram Bots**): thêm nhiều bot, nhiều người nhận, quy tắc theo loại sự kiện, lịch sử gửi và tự động gửi cảnh báo kèm ảnh bằng chứng. Xem [Cảnh báo Telegram](#cảnh-báo-telegram-settings--telegram-bots).
 
 ## Yêu cầu
 
@@ -407,6 +408,113 @@ AI-Cam polling `GET /api/ai/runtime-config` (header `x-api-key`) và tự
 **thêm / bỏ / khởi động lại** worker theo từng camera — **không** restart cả
 dịch vụ khi thêm một camera. `.env` của AI-Cam chỉ còn cấu hình **cấp dịch vụ**
 (model path, device, storage, URL backend...).
+
+## Cảnh báo Telegram (Settings → Telegram Bots)
+
+Gửi cảnh báo giám sát tới Telegram qua **nhiều bot**, mỗi bot có **nhiều người
+nhận** và **quy tắc thông báo riêng**. Toàn bộ cấu hình lưu trong PostgreSQL và
+quản lý từ dashboard — **không** hardcode token, **không** cần sửa `.env` khi
+thêm bot.
+
+### Biến môi trường
+
+Chỉ cần **một** biến mới (không bắt buộc để chạy app — hệ thống vẫn khởi động
+bình thường khi chưa có bot nào):
+
+```bash
+# Khoá AES-256-GCM cho bot token. Sinh một lần rồi giữ cố định.
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# → dán vào backend/.env
+TELEGRAM_ENCRYPTION_KEY="<chuỗi hex vừa sinh>"
+```
+
+Nếu bỏ trống, backend fallback sang `SETTINGS_ENCRYPTION_KEY` rồi `JWT_SECRET`
+(kèm cảnh báo trong log). **Đổi khoá = mọi token đã lưu không giải mã được**,
+admin phải nhập lại token cho từng bot.
+
+Tuỳ chọn:
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `TELEGRAM_WORKER_INTERVAL_MS` | `10000` | Chu kỳ worker xử lý hàng đợi gửi (ms). `0` = tắt worker. |
+| `TELEGRAM_MEDIA_BASE_URL` | – | Origin công khai để Telegram tải ảnh bằng chứng (`sendPhoto`) khi `imageUrl` là đường dẫn tương đối. |
+| `DASHBOARD_BASE_URL` | `FRONTEND_URL` | Base URL cho link "View Event Details" trong tin nhắn. |
+
+### Thêm bot
+
+1. Vào **Settings → Telegram Bots → Add Bot**.
+2. Nhập tên hiển thị và **bot token** lấy từ [@BotFather](https://t.me/BotFather).
+3. Backend gọi `getMe` để xác thực **trước khi lưu** — token sai sẽ bị từ chối và
+   không ghi gì vào DB. Token hợp lệ được mã hoá AES-256-GCM rồi mới lưu.
+4. API chỉ trả về `tokenMasked` (dạng `1234…••••••••4fGh`), không bao giờ trả token thật.
+
+Bot mới mặc định **bật** và bật sẵn quy tắc `INTRUSION`.
+
+### Người nhận
+
+- Thêm **chat ID** thủ công (chat riêng, group, supergroup, channel).
+- Nút **Discover chats** đọc `getUpdates` để gợi ý các chat bot vừa thấy — nhưng
+  việc bot có quyền gửi hay không phải kiểm tra bằng **Send test**. Thêm bot vào
+  group **không** tự động cấp quyền đăng bài.
+- Mỗi người nhận bật/tắt riêng và gửi thử riêng.
+
+### Quy tắc thông báo
+
+Mỗi bot có bảng riêng cho 8 loại sự kiện (`INTRUSION`, `FIRE`, `SMOKE`, `PPE`,
+`FACE`, `VEHICLE`, `FLOOD`, `TRAFFIC_VIOLATION`): bật/tắt và **ngưỡng tin cậy
+tối thiểu** (tuỳ chọn). Dispatcher chỉ gửi khi loại sự kiện được bật **và**
+`confidence >= ngưỡng`.
+
+### Luồng gửi & độ tin cậy
+
+```
+AI-Cam → POST /api/events → lưu Event → tạo Alert (isAlert) → Socket.IO
+                                                           ↘ Telegram dispatcher
+                                                              → telegram_delivery_logs (PENDING)
+                                                              → worker (10s) → Bot API
+```
+
+- **Chỉ gửi khi `isAlert = true`** — sự kiện thường không gửi. Điều kiện tạo
+  alert giữ nguyên như cũ (`INTRUSION` luôn alert, còn lại `confidence >= 0.8`).
+- `POST /api/events` **không** chờ Telegram: hàm enqueue được gọi kiểu
+  fire-and-forget và tự nuốt lỗi, nên Telegram chậm/sập **không** làm hỏng hay
+  chậm request từ AI-Cam.
+- Hàng đợi nằm trong chính PostgreSQL (`telegram_delivery_logs`), không cần Redis.
+  Worker chạy nền trong tiến trình backend và tiếp tục sau khi restart.
+- **Chống trùng**: unique index `(event_id, bot_id, recipient_id)` + claim
+  nguyên tử `PENDING → PROCESSING` ⇒ mỗi cặp (sự kiện, bot, người nhận) chỉ gửi 1 lần.
+- **Thử lại**: lỗi tạm thời (mạng, 5xx, 429) được retry tối đa 3 lần với backoff
+  luỹ thừa; `retry_after` của Telegram được tôn trọng (chờ ngay nếu ≤ 10s, quá thì
+  đẩy `nextAttemptAt` để worker quay lại sau). Lỗi vĩnh viễn (chat không tồn tại,
+  bot bị chặn, token bị thu hồi) → `FAILED` ngay, không retry vô hạn.
+- Token bị thu hồi (401) → bot được **tự động tắt** và ghi `lastError`.
+
+### Trạng thái & API
+
+Trạng thái gửi: `PENDING` → `PROCESSING` → `SENT` / `FAILED` / `SKIPPED`.
+
+Toàn bộ endpoint nằm dưới `/api/telegram/*` và **chỉ Admin** (JWT hiện có +
+middleware `authorize('Admin')`); Manager/Operator nhận `403`.
+
+| Method | Endpoint |
+|---|---|
+| `GET` | `/api/telegram/bots` · `/bots/:id` · `/bots/:id/recipients` · `/bots/:id/rules` · `/bots/:id/updates` · `/delivery-logs` |
+| `POST` | `/bots` · `/bots/:id/verify` · `/bots/:id/test` · `/bots/:id/recipients` · `/recipients/:recipientId/test` |
+| `PATCH` | `/bots/:id` · `/recipients/:recipientId` |
+| `PUT` | `/bots/:id/rules` |
+| `DELETE` | `/bots/:id` · `/recipients/:recipientId` |
+
+Swagger UI: `http://localhost:4000/api/docs` (tag **Telegram**).
+
+### Kiểm thử
+
+```bash
+cd backend && npm test     # 42 test Telegram (mock Bot API + store in-memory)
+cd frontend && npm test    # guard tĩnh cho UI Telegram
+```
+
+Test dùng `tests/helpers/telegram-harness.ts` (store in-memory + fake Bot API),
+không cần mạng và không cần database.
 
 ## Advanced / Xử lý sự cố
 

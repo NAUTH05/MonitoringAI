@@ -27,8 +27,8 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("users")
   @@index([roleId])
+  @@map("users")
 }
 
 enum CameraStatus {
@@ -57,9 +57,9 @@ model Camera {
   events        Event[]
   cameraModules CameraModule[]
 
-  @@map("cameras")
   @@index([status])
   @@index([location])
+  @@map("cameras")
 }
 
 model AiModule {
@@ -86,9 +86,9 @@ model CameraModule {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([cameraId, moduleId])
-  @@map("camera_modules")
   @@index([cameraId])
   @@index([moduleId])
+  @@map("camera_modules")
 }
 
 enum EventType {
@@ -114,24 +114,26 @@ enum EvidenceType {
 }
 
 model Event {
-  id         String     @id @default(uuid())
-  cameraId   String     @map("camera_id")
-  eventType  EventType  @map("event_type")
-  confidence Float
-  imageUrl   String?    @map("image_url")
-  videoUrl   String?    @map("video_url")
-  timestamp  DateTime   @default(now())
-  isAlert    Boolean    @default(false) @map("is_alert")
-  camera     Camera     @relation(fields: [cameraId], references: [id])
-  alert      Alert?
-  evidence   Evidence[]
-  createdAt  DateTime   @default(now()) @map("created_at")
+  id                 String                @id @default(uuid())
+  cameraId           String                @map("camera_id")
+  eventType          EventType             @map("event_type")
+  confidence         Float
+  imageUrl           String?               @map("image_url")
+  videoUrl           String?               @map("video_url")
+  timestamp          DateTime              @default(now())
+  isAlert            Boolean               @default(false) @map("is_alert")
+  camera             Camera                @relation(fields: [cameraId], references: [id])
+  alert              Alert?
+  evidence           Evidence[]
+  analyses           EvidenceAnalysis[]
+  telegramDeliveries TelegramDeliveryLog[]
+  createdAt          DateTime              @default(now()) @map("created_at")
 
-  @@map("events")
   @@index([cameraId])
   @@index([eventType])
   @@index([timestamp])
   @@index([isAlert])
+  @@map("events")
 }
 
 /// One row per evidence artifact attached to an Event. An intrusion episode is
@@ -139,22 +141,24 @@ model Event {
 /// a recorded video. `imageUrl`/`videoUrl` on Event are kept for backwards
 /// compatibility and mirror the first image / the finished video.
 model Evidence {
-  id         String       @id @default(uuid())
-  eventId    String       @map("event_id")
-  event      Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id         String            @id @default(uuid())
+  eventId    String            @map("event_id")
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   type       EvidenceType
   url        String
-  objectKey  String?      @map("object_key")
-  sequence   Int          @default(0)
-  capturedAt DateTime     @default(now()) @map("captured_at")
-  durationMs Int?         @map("duration_ms")
+  objectKey  String?           @map("object_key")
+  sequence   Int               @default(0)
+  capturedAt DateTime          @default(now()) @map("captured_at")
+  durationMs Int?              @map("duration_ms")
   metadata   Json?
-  createdAt  DateTime     @default(now()) @map("created_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  analysis   EvidenceAnalysis?
+  indexJob   AIIndexingJob?
 
-  @@map("evidence")
   @@index([eventId])
   @@index([eventId, sequence])
   @@index([type])
+  @@map("evidence")
 }
 
 model Alert {
@@ -165,9 +169,9 @@ model Alert {
   acknowledgedAt DateTime?   @map("acknowledged_at")
   createdAt      DateTime    @default(now()) @map("created_at")
 
-  @@map("alerts")
   @@index([status])
   @@index([createdAt])
+  @@map("alerts")
 }
 
 model DashboardLayout {
@@ -187,7 +191,238 @@ model SystemLog {
   metadata  Json?
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@map("system_logs")
   @@index([level])
   @@index([createdAt])
+  @@map("system_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Search (natural-language + visual indexing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AIProviderKind {
+  GEMINI
+  LOCAL
+}
+
+enum AIIndexStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+/// Singleton row (id = "default"). Holds the AI Search configuration.
+/// Secrets are AES-256-GCM encrypted before they reach this table and are
+/// never returned in plaintext by the API.
+model AISetting {
+  id                    String         @id
+  enabled               Boolean        @default(false)
+  provider              AIProviderKind @default(GEMINI)
+  geminiApiKeyEnc       String?        @map("gemini_api_key_enc")
+  geminiTextModel       String         @default("gemini-2.5-flash") @map("gemini_text_model")
+  geminiVisionModel     String?        @map("gemini_vision_model")
+  geminiEmbeddingModel  String?        @map("gemini_embedding_model")
+  localEndpoint         String         @default("http://127.0.0.1:11434") @map("local_endpoint")
+  /// "ollama" (native REST) or "openai" (OpenAI-compatible /v1/chat/completions)
+  localApiMode          String         @default("ollama") @map("local_api_mode")
+  localApiKeyEnc        String?        @map("local_api_key_enc")
+  localTextModel        String?        @map("local_text_model")
+  localVisionModel      String?        @map("local_vision_model")
+  localEmbeddingModel   String?        @map("local_embedding_model")
+  timeoutMs             Int            @default(30000) @map("timeout_ms")
+  /// Master switch for the evidence indexing worker.
+  visualIndexingEnabled Boolean        @default(false) @map("visual_indexing_enabled")
+  /// Explicit consent to send evidence images/frames to a cloud provider.
+  cloudVisionEnabled    Boolean        @default(false) @map("cloud_vision_enabled")
+  indexingPaused        Boolean        @default(false) @map("indexing_paused")
+  maxFramesPerVideo     Int            @default(6) @map("max_frames_per_video")
+  frameIntervalMs       Int            @default(3000) @map("frame_interval_ms")
+  maxJobsPerRun         Int            @default(20) @map("max_jobs_per_run")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  @@map("ai_settings")
+}
+
+/// AI-generated description of one Evidence artifact (image, or a video summary
+/// with per-frame rows). The Evidence row itself is never modified.
+model EvidenceAnalysis {
+  id             String                  @id @default(uuid())
+  evidenceId     String                  @unique @map("evidence_id")
+  evidence       Evidence                @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  eventId        String                  @map("event_id")
+  event          Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status         AIIndexStatus           @default(PENDING)
+  provider       AIProviderKind?
+  model          String?
+  summary        String?
+  objects        String[]                @default([])
+  attributes     String[]                @default([])
+  activities     String[]                @default([])
+  scene          String?
+  uncertainty    String[]                @default([])
+  /// Lower-cased, diacritics-stripped concatenation used for keyword search.
+  searchText     String?                 @map("search_text")
+  /// Dense vector. Stored as a plain array (no pgvector on this deployment) and
+  /// compared with cosine similarity in the app over a bounded candidate set.
+  embedding      Float[]                 @default([])
+  embeddingModel String?                 @map("embedding_model")
+  /// Hash of the source bytes + model, so unchanged evidence is not re-billed.
+  contentHash    String?                 @map("content_hash")
+  framesAnalyzed Int                     @default(0) @map("frames_analyzed")
+  durationMs     Int?                    @map("duration_ms")
+  error          String?
+  indexedAt      DateTime?               @map("indexed_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  frames         EvidenceFrameAnalysis[]
+
+  @@index([eventId])
+  @@index([status])
+  @@map("evidence_analyses")
+}
+
+model EvidenceFrameAnalysis {
+  id          String           @id @default(uuid())
+  analysisId  String           @map("analysis_id")
+  analysis    EvidenceAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  timestampMs Int              @map("timestamp_ms")
+  description String
+  searchText  String?          @map("search_text")
+  embedding   Float[]          @default([])
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([analysisId])
+  @@map("evidence_frame_analyses")
+}
+
+/// Durable queue for evidence indexing. One row per evidence artifact.
+model AIIndexingJob {
+  id          String          @id @default(uuid())
+  evidenceId  String          @unique @map("evidence_id")
+  evidence    Evidence        @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  status      AIIndexStatus   @default(PENDING)
+  attempts    Int             @default(0)
+  nextRetryAt DateTime?       @map("next_retry_at")
+  lastError   String?         @map("last_error")
+  provider    AIProviderKind?
+  model       String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  startedAt   DateTime?       @map("started_at")
+  finishedAt  DateTime?       @map("finished_at")
+
+  @@index([status, nextRetryAt])
+  @@map("ai_indexing_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Telegram alert delivery
+//
+// Admins register one or more bots from the dashboard (Settings → Telegram
+// Bots). Bot tokens are AES-256-GCM encrypted with `TELEGRAM_ENCRYPTION_KEY`
+// before they reach `token_encrypted` and are never returned by the API.
+//
+// `telegram_delivery_logs` doubles as the durable outbound queue: the alert
+// pipeline inserts PENDING rows inside the request and a background worker
+// drains them, so a slow/unreachable Telegram API can never block (or fail)
+// the AI-Cam event ingest request.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TelegramDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model TelegramBot {
+  id             String    @id @default(uuid())
+  name           String
+  /// @username reported by Telegram `getMe` (without the leading @).
+  username       String?
+  /// AES-256-GCM payload. Plaintext tokens never touch the database.
+  tokenEncrypted String    @map("token_encrypted")
+  isEnabled      Boolean   @default(true) @map("is_enabled")
+  isVerified     Boolean   @default(false) @map("is_verified")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  /// Last Telegram error, sanitized (tokens are never written here).
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  recipients   TelegramRecipient[]
+  rules        TelegramNotificationRule[]
+  deliveryLogs TelegramDeliveryLog[]
+
+  @@index([isEnabled])
+  @@map("telegram_bots")
+}
+
+model TelegramRecipient {
+  id        String      @id @default(uuid())
+  botId     String      @map("bot_id")
+  bot       TelegramBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  /// Telegram chat id: negative for groups/supergroups, positive for private.
+  chatId    String      @map("chat_id")
+  name      String
+  /// private | group | supergroup | channel (as reported by Telegram).
+  chatType  String?     @map("chat_type")
+  isEnabled Boolean     @default(true) @map("is_enabled")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  deliveryLogs TelegramDeliveryLog[]
+
+  @@unique([botId, chatId])
+  @@index([botId])
+  @@map("telegram_recipients")
+}
+
+model TelegramNotificationRule {
+  id            String      @id @default(uuid())
+  botId         String      @map("bot_id")
+  bot           TelegramBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  /// EventType value (INTRUSION, FIRE, ...). Stored as text so a new event
+  /// type can be enabled without a schema migration.
+  eventType     String      @map("event_type")
+  isEnabled     Boolean     @default(true) @map("is_enabled")
+  /// Optional gate: the event confidence must be >= this value (0..1).
+  minConfidence Float?      @map("min_confidence")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@unique([botId, eventType])
+  @@index([botId])
+  @@map("telegram_notification_rules")
+}
+
+model TelegramDeliveryLog {
+  id                String                 @id @default(uuid())
+  botId             String                 @map("bot_id")
+  bot               TelegramBot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+  recipientId       String?                @map("recipient_id")
+  recipient         TelegramRecipient?     @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  eventId           String?                @map("event_id")
+  event             Event?                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status            TelegramDeliveryStatus @default(PENDING)
+  telegramMessageId String?                @map("telegram_message_id")
+  errorMessage      String?                @map("error_message")
+  attemptCount      Int                    @default(0) @map("attempt_count")
+  /// When the worker may retry a PENDING row. Null = immediately eligible.
+  nextAttemptAt     DateTime?              @map("next_attempt_at")
+  sentAt            DateTime?              @map("sent_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  /// One row per (event, bot, recipient) — the duplicate-notification guard.
+  /// Postgres treats NULLs as distinct, so ad-hoc test sends (event_id NULL)
+  /// are not affected by this constraint.
+  @@unique([eventId, botId, recipientId])
+  @@index([status, nextAttemptAt])
+  @@index([botId, createdAt])
+  @@index([createdAt])
+  @@index([eventId])
+  @@map("telegram_delivery_logs")
 }

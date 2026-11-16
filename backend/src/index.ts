@@ -19,6 +19,7 @@ if (!fs.existsSync(evidenceDir)) {
 import { startHeartbeatWatchdog } from './heartbeat';
 import { errorHandler } from './middleware/errorHandler';
 import aiRoutes from './routes/ai';
+import aiSearchRoutes from './routes/ai-search';
 import authRoutes from './routes/auth';
 import cameraRoutes from './routes/cameras';
 import captureRoutes from './routes/capture';
@@ -28,9 +29,11 @@ import healthRoutes from './routes/health';
 import layoutRoutes from './routes/layout';
 import moduleRoutes from './routes/modules';
 import reportRoutes from './routes/reports';
+import telegramRoutes from './routes/telegram';
 import userRoutes from './routes/users';
 import licensePlateRoutes from './routes/license-plates';
 import { initSocket } from './socket';
+import { telegramDispatcher } from './services/telegram';
 
 const app = express();
 const httpServer = createServer(app);
@@ -138,11 +141,24 @@ app.use('/api/layout', layoutRoutes);
 app.use('/api/license-plates', licensePlateRoutes);
 // Machine-to-machine AI runtime discovery (x-api-key). See ai-cam StreamManager.
 app.use('/api/ai', aiRoutes);
+// Hybrid natural-language search over events + evidence.
+app.use('/api/ai-search', aiSearchRoutes);
+// Telegram bot management + alert delivery (Admin only).
+app.use('/api/telegram', telegramRoutes);
 
 app.use(errorHandler);
 
 initSocket(io);
 startHeartbeatWatchdog(io);
+
+// Durable Telegram delivery worker. It only drains PENDING rows, so it is a
+// no-op (one cheap query every interval) when no bots are configured — a fresh
+// deployment with no Telegram setup starts exactly as before.
+const telegramWorkerInterval = Number(process.env.TELEGRAM_WORKER_INTERVAL_MS ?? 10_000);
+if (telegramWorkerInterval > 0) {
+  telegramDispatcher.start(telegramWorkerInterval);
+  console.log(`[telegram] delivery worker started (every ${telegramWorkerInterval}ms)`);
+}
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
 httpServer.listen(PORT, () => {

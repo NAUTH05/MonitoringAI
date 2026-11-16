@@ -29,6 +29,10 @@ desktop.ini
 *.bak
 *.orig
 
+# ── Local database backups (never commit dumps) ───────────────────────────────
+backups/
+*.dump
+
 # ── Internal tools ────────────────────────────────────────────────────────────
 .claude
 .workbuddy-ai/

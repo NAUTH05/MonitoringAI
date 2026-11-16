@@ -147,3 +147,234 @@ export interface AuthUser {
   email: string;
   role: UserRole;
 }
+
+// ── AI Search ────────────────────────────────────────────────────────────────
+
+export type AISearchMode =
+  | "metadata_search"
+  | "visual_search"
+  | "hybrid_search"
+  | "license_plate_search"
+  | "event_count"
+  | "event_statistics"
+  | "evidence_lookup";
+
+export type AISearchModeOption = "auto" | "metadata" | "visual" | "hybrid";
+
+export interface AISearchFilters {
+  eventType?: EventType;
+  cameraName?: string;
+  cameraLocation?: string;
+  isAlert?: boolean;
+  minConfidence?: number;
+  maxConfidence?: number;
+  startTime?: string;
+  endTime?: string;
+  timeLabel?: string;
+  licensePlate?: string;
+  vehicleType?: string;
+  plateColor?: string;
+  hasEvidence?: boolean;
+}
+
+export interface AISearchIntent {
+  intent: AISearchMode;
+  language: "vi" | "en";
+  structuredFilters: AISearchFilters;
+  visualQuery?: {
+    description: string;
+    requiresSemanticSearch: boolean;
+    mediaType?: "image" | "video" | "any";
+  };
+  groupBy?: "camera" | "eventType" | "day" | "hour";
+  sort: "relevance" | "newest" | "oldest";
+  limit: number;
+  reasoning?: string;
+}
+
+export interface AISearchAppliedFilter {
+  field: string;
+  label: string;
+  value: string;
+}
+
+export interface AISearchWarning {
+  code: string;
+  message: string;
+}
+
+export interface AISearchGroup {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface AISearchPlate {
+  id: string;
+  plateText: string | null;
+  vehicleType: string | null;
+  plateColor: string | null;
+  confidence: number | null;
+  eventTime: string;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  cameraName: string | null;
+  cameraLocation: string | null;
+}
+
+export interface AISearchResponse {
+  query: string;
+  /** How the question was understood: a real LLM, or the deterministic parser. */
+  interpretedBy: "gemini" | "local" | "rules";
+  llmReady: boolean;
+  intent: AISearchIntent;
+  mode: AISearchMode;
+  total: number;
+  returned: number;
+  events: Event[];
+  groups?: AISearchGroup[];
+  plates?: AISearchPlate[];
+  answer?: string;
+  appliedFilters: AISearchAppliedFilter[];
+  warnings: AISearchWarning[];
+  semanticApplied: boolean;
+  timingMs: number;
+}
+
+export interface AICapabilities {
+  text: boolean;
+  vision: boolean;
+  embedding: boolean;
+}
+
+export interface AIProviderStatus {
+  enabled: boolean;
+  provider: "GEMINI" | "LOCAL";
+  capabilities: AICapabilities;
+  blockedReason?: string;
+  visualIndexingEnabled: boolean;
+  cloudVisionEnabled: boolean;
+  indexingPaused: boolean;
+  llmReady: boolean;
+  updatedAt: string;
+}
+
+export interface AISettings {
+  enabled: boolean;
+  provider: "GEMINI" | "LOCAL";
+  gemini: {
+    hasApiKey: boolean;
+    apiKeyMasked: string | null;
+    textModel: string;
+    visionModel: string | null;
+    embeddingModel: string | null;
+  };
+  local: {
+    endpoint: string;
+    apiMode: "ollama" | "openai";
+    hasApiKey: boolean;
+    apiKeyMasked: string | null;
+    textModel: string | null;
+    visionModel: string | null;
+    embeddingModel: string | null;
+  };
+  timeoutMs: number;
+  visualIndexingEnabled: boolean;
+  cloudVisionEnabled: boolean;
+  indexingPaused: boolean;
+  maxFramesPerVideo: number;
+  frameIntervalMs: number;
+  maxJobsPerRun: number;
+  capabilities: AICapabilities;
+  blockedReason?: string;
+  encryptionConfigured: boolean;
+  updatedAt: string;
+}
+
+export interface AIConnectionResult {
+  ok: boolean;
+  message: string;
+  capabilities: AICapabilities;
+  models?: string[];
+  provider: "GEMINI" | "LOCAL";
+  latencyMs?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Telegram alert delivery (Settings → Telegram Bots)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TelegramDeliveryStatus = 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED' | 'SKIPPED';
+
+export interface TelegramBot {
+  id: string;
+  name: string;
+  username: string | null;
+  isEnabled: boolean;
+  isVerified: boolean;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Masked preview only — the API never returns a real token. */
+  tokenMasked: string;
+  recipientCount: number;
+  enabledRecipientCount: number;
+  ruleCount: number;
+}
+
+export interface TelegramRecipient {
+  id: string;
+  botId: string;
+  chatId: string;
+  name: string;
+  chatType: string | null;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TelegramRule {
+  eventType: EventType;
+  isEnabled: boolean;
+  minConfidence: number | null;
+  configured: boolean;
+}
+
+export interface TelegramDeliveryLog {
+  id: string;
+  botId: string;
+  recipientId: string | null;
+  eventId: string | null;
+  status: TelegramDeliveryStatus;
+  telegramMessageId: string | null;
+  errorMessage: string | null;
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  bot?: { id: string; name: string } | null;
+  recipient?: { id: string; name: string; chatId: string } | null;
+  event?: { id: string; eventType: EventType; confidence: number; timestamp: string } | null;
+}
+
+export interface TelegramTestResult {
+  target: string;
+  chatId: string | null;
+  ok: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+export interface TelegramChatDiscovery {
+  chatId: string;
+  title: string;
+  chatType: string;
+  lastSeenAt: string;
+  saved: boolean;
+}
+
+export interface TelegramStatus {
+  configured: boolean;
+  keySource: string | null;
+}
